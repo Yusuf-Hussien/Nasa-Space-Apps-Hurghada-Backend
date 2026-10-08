@@ -1,0 +1,6 @@
+@NASAHackathon.API_HostAddress = http://localhost:5003
+
+GET {{NASAHackathon.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

@@ -1,0 +1,15 @@
+namespace NASAHackathon.API.DTOs.Common
+{
+    public class ErrorResponse
+    {
+        public ErrorDetail Error { get; set; } = new();
+        public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+    }
+
+    public class ErrorDetail
+    {
+        public string Code { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
+        public object? Details { get; set; }
+    }
+}
