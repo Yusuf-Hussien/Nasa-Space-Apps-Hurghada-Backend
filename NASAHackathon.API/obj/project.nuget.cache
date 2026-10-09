@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "dF2XWEv0QtQ=",
+  "dgSpecHash": "FGonScNyTac=",
   "success": true,
-  "projectFilePath": "C:\\Users\\20127\\Downloads\\opencode-mine\\nasa-space-apps-hurghada-backend\\NASAHackathon.API\\NASAHackathon.API.csproj",
+  "projectFilePath": "C:\\Users\\20127\\Downloads\\opencode-mine\\Nasa-Space-Apps-Hurghada-Backend\\NASAHackathon.API\\NASAHackathon.API.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\20127\\.nuget\\packages\\automapper\\12.0.1\\automapper.12.0.1.nupkg.sha512",
     "C:\\Users\\20127\\.nuget\\packages\\automapper.extensions.microsoft.dependencyinjection\\12.0.1\\automapper.extensions.microsoft.dependencyinjection.12.0.1.nupkg.sha512",
@@ -81,9 +81,9 @@
       "code": "NU1903",
       "level": "Warning",
       "message": "Package 'AutoMapper' 12.0.1 has a known high severity vulnerability, https://github.com/advisories/GHSA-rvv3-g6hj-g44x",
-      "projectPath": "C:\\Users\\20127\\Downloads\\opencode-mine\\nasa-space-apps-hurghada-backend\\NASAHackathon.API\\NASAHackathon.API.csproj",
+      "projectPath": "C:\\Users\\20127\\Downloads\\opencode-mine\\Nasa-Space-Apps-Hurghada-Backend\\NASAHackathon.API\\NASAHackathon.API.csproj",
       "warningLevel": 1,
-      "filePath": "C:\\Users\\20127\\Downloads\\opencode-mine\\nasa-space-apps-hurghada-backend\\NASAHackathon.API\\NASAHackathon.API.csproj",
+      "filePath": "C:\\Users\\20127\\Downloads\\opencode-mine\\Nasa-Space-Apps-Hurghada-Backend\\NASAHackathon.API\\NASAHackathon.API.csproj",
       "libraryId": "AutoMapper",
       "targetGraphs": [
         "net10.0"

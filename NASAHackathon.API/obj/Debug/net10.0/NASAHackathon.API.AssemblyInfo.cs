@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("NASAHackathon.API")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+d740c0238e1c3f75171c92e43992c0209a82806c")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+40b9d20ac08438333e60fcd0503accbd63444cce")]
 [assembly: System.Reflection.AssemblyProductAttribute("NASAHackathon.API")]
 [assembly: System.Reflection.AssemblyTitleAttribute("NASAHackathon.API")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

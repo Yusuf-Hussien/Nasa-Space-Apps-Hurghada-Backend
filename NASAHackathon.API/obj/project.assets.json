@@ -4274,11 +4274,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\20127\\Downloads\\opencode-mine\\nasa-space-apps-hurghada-backend\\NASAHackathon.API\\NASAHackathon.API.csproj",
+      "projectUniqueName": "C:\\Users\\20127\\Downloads\\opencode-mine\\Nasa-Space-Apps-Hurghada-Backend\\NASAHackathon.API\\NASAHackathon.API.csproj",
       "projectName": "NASAHackathon.API",
-      "projectPath": "C:\\Users\\20127\\Downloads\\opencode-mine\\nasa-space-apps-hurghada-backend\\NASAHackathon.API\\NASAHackathon.API.csproj",
+      "projectPath": "C:\\Users\\20127\\Downloads\\opencode-mine\\Nasa-Space-Apps-Hurghada-Backend\\NASAHackathon.API\\NASAHackathon.API.csproj",
       "packagesPath": "C:\\Users\\20127\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\20127\\Downloads\\opencode-mine\\nasa-space-apps-hurghada-backend\\NASAHackathon.API\\obj\\",
+      "outputPath": "C:\\Users\\20127\\Downloads\\opencode-mine\\Nasa-Space-Apps-Hurghada-Backend\\NASAHackathon.API\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
