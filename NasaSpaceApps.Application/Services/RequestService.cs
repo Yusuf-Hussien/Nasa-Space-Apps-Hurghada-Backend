@@ -44,51 +44,30 @@ public sealed class RequestService
         var created = await _repository.AddRequestAsync(request);
         return Result<ServiceRequest>.Success(created);
     }
-}
 
-public sealed class AttendanceService
-{
-    private readonly INasaSpaceAppsRepository _repository;
-
-    public AttendanceService(INasaSpaceAppsRepository repository)
+    public async Task<Result<ServiceRequest>> ResolveRequestAsync(int requestId, string status)
     {
-        _repository = repository;
-    }
-
-    public async Task<Result<Attendance>> MarkAttendanceAsync(int studentId, DateTime eventDate, string status, string? markedBy)
-    {
-        var student = await _repository.GetStudentByIdAsync(studentId);
-        if (student is null)
+        var request = await _repository.GetRequestByIdAsync(requestId);
+        if (request is null)
         {
-            return Result<Attendance>.Failure("student.not_found", 404, "Student was not found.");
+            return Result<ServiceRequest>.Failure("request.not_found", 404, "Request not found.");
         }
 
-        var attendance = new Attendance
+        if (!string.Equals(status, "In Progress", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(status, "Resolved", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(status, "Rejected", StringComparison.OrdinalIgnoreCase))
         {
-            StudentId = studentId,
-            EventDate = eventDate,
-            Status = status,
-            MarkedBy = markedBy,
-            Timestamp = DateTime.UtcNow
-        };
+            return Result<ServiceRequest>.Failure("request.invalid_status", 400, "Status must be In Progress, Resolved, or Rejected.");
+        }
 
-        var saved = await _repository.AddAttendanceAsync(attendance);
-        return Result<Attendance>.Success(saved);
-    }
-}
+        request.Status = char.ToUpper(status[0]) + status[1..].ToLower();
+        if (string.Equals(request.Status, "Resolved", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(request.Status, "Rejected", StringComparison.OrdinalIgnoreCase))
+        {
+            request.ResolvedAt = DateTime.UtcNow;
+        }
 
-public sealed class SponsorService
-{
-    private readonly INasaSpaceAppsRepository _repository;
-
-    public SponsorService(INasaSpaceAppsRepository repository)
-    {
-        _repository = repository;
-    }
-
-    public async Task<Result<List<Sponsor>>> GetSponsorsAsync()
-    {
-        var sponsors = await _repository.GetSponsorsAsync(true);
-        return Result<List<Sponsor>>.Success(sponsors);
+        await _repository.UpdateRequestAsync(request);
+        return Result<ServiceRequest>.Success(request);
     }
 }

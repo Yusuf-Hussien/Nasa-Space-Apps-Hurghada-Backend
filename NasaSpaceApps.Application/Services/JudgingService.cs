@@ -18,12 +18,20 @@ public sealed class JudgingService
         return Result<List<JudgingCriterion>>.Success(await _repository.GetJudgingCriteriaAsync());
     }
 
-    public async Task<Result<List<JudgeScore>>> SubmitScoresAsync(int teamId, int judgeId, List<(int CriterionId, decimal Score, string? Comment)> scores)
+    public async Task<Result<List<JudgeScore>>> SubmitScoresAsync(
+        int teamId,
+        int judgeId,
+        List<(int CriterionId, decimal Score, string? Comment)> scores)
     {
         var team = await _repository.GetTeamByIdAsync(teamId);
         if (team is null)
         {
             return Result<List<JudgeScore>>.Failure("team.not_found", 404, "The team does not exist.");
+        }
+
+        if (scores is null || scores.Count == 0)
+        {
+            return Result<List<JudgeScore>>.Failure("judging.no_scores", 400, "At least one criterion score is required.");
         }
 
         var persistedScores = new List<JudgeScore>();
@@ -38,7 +46,7 @@ public sealed class JudgingService
 
             if (item.Score < 0m || item.Score > criterion.MaxScore)
             {
-                return Result<List<JudgeScore>>.Failure("score.invalid", 400, $"Score for criterion {criterion.Name} is outside the allowed range.");
+                return Result<List<JudgeScore>>.Failure("score.invalid", 400, $"Score for criterion {criterion.Name} is outside the allowed range (0–{criterion.MaxScore}).");
             }
 
             var score = new JudgeScore
@@ -56,5 +64,11 @@ public sealed class JudgingService
         }
 
         return Result<List<JudgeScore>>.Success(persistedScores);
+    }
+
+    public async Task<Result<List<JudgeScore>>> GetScoresForTeamAsync(int teamId)
+    {
+        var scores = await _repository.GetScoresForTeamAsync(teamId);
+        return Result<List<JudgeScore>>.Success(scores);
     }
 }

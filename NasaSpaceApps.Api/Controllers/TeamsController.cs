@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NasaSpaceApps.Application.Services;
 
@@ -23,15 +24,19 @@ public class TeamsController : ControllerBase
             return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
         }
 
+        // Hide username from non-staff callers
+        var isStaff = User.IsInRole("Admin") || User.IsInRole("CoreTeam") || User.IsInRole("Judge");
+
         return Ok(result.Value!.Select(team => new
         {
             teamId = team.TeamId,
             name = team.Name,
-            username = team.Username,
+            username = isStaff ? team.Username : null,
             status = team.Status
         }));
     }
 
+    [Authorize(Policy = "StaffOnly")]
     [HttpGet("{teamId:int}")]
     public async Task<ActionResult> GetTeam(int teamId)
     {

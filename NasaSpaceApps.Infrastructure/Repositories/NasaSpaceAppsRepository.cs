@@ -16,9 +16,10 @@ public sealed class NasaSpaceAppsRepository : INasaSpaceAppsRepository
 
     public async Task<Team?> GetTeamByUsernameAsync(string username)
     {
+        var normalized = username.Trim().ToUpper();
         return await _context.Teams
             .Include(team => team.Challenge)
-            .FirstOrDefaultAsync(team => team.Username == username);
+            .FirstOrDefaultAsync(team => team.Username.ToUpper() == normalized);
     }
 
     public async Task<Team?> GetTeamByIdAsync(int teamId)
@@ -34,7 +35,12 @@ public sealed class NasaSpaceAppsRepository : INasaSpaceAppsRepository
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            query = query.Where(team => team.Name.Contains(search) || team.Username.Contains(search));
+            var normalized = search.Trim().ToUpper();
+            var hasNumeric = int.TryParse(search.Trim(), out var searchId);
+            query = query.Where(team =>
+                team.Name.ToUpper().Contains(normalized) ||
+                team.Username.ToUpper().Contains(normalized) ||
+                (hasNumeric && team.TeamId == searchId));
         }
 
         return await query
@@ -71,6 +77,22 @@ public sealed class NasaSpaceAppsRepository : INasaSpaceAppsRepository
             .ToListAsync();
     }
 
+    public async Task<List<Student>> GetStudentsByIdsAsync(IEnumerable<int> studentIds)
+    {
+        var ids = studentIds.ToList();
+        return await _context.Students
+            .Where(student => ids.Contains(student.StudentId))
+            .ToListAsync();
+    }
+
+    public async Task<List<Student>> GetAllStudentsWithTeamAsync()
+    {
+        return await _context.Students
+            .Include(student => student.Team)
+            .OrderBy(student => student.Name)
+            .ToListAsync();
+    }
+
     public async Task<List<ServiceRequest>> GetRequestsAsync(int? teamId = null, string? type = null, string? status = null)
     {
         var query = _context.ServiceRequests.AsQueryable();
@@ -95,6 +117,12 @@ public sealed class NasaSpaceAppsRepository : INasaSpaceAppsRepository
             .ToListAsync();
     }
 
+    public async Task<ServiceRequest?> GetRequestByIdAsync(int requestId)
+    {
+        return await _context.ServiceRequests
+            .FirstOrDefaultAsync(request => request.RequestId == requestId);
+    }
+
     public async Task<ServiceRequest> AddRequestAsync(ServiceRequest request)
     {
         _context.ServiceRequests.Add(request);
@@ -102,11 +130,58 @@ public sealed class NasaSpaceAppsRepository : INasaSpaceAppsRepository
         return request;
     }
 
+    public async Task UpdateRequestAsync(ServiceRequest request)
+    {
+        _context.ServiceRequests.Update(request);
+        await _context.SaveChangesAsync();
+    }
+
     public async Task<Attendance> AddAttendanceAsync(Attendance attendance)
     {
         _context.Attendances.Add(attendance);
         await _context.SaveChangesAsync();
         return attendance;
+    }
+
+    public async Task<Attendance?> GetAttendanceForStudentDateAsync(int studentId, DateTime eventDate)
+    {
+        var date = eventDate.Date;
+        return await _context.Attendances
+            .FirstOrDefaultAsync(a => a.StudentId == studentId && a.EventDate.Date == date);
+    }
+
+    public async Task UpdateAttendanceAsync(Attendance attendance)
+    {
+        _context.Attendances.Update(attendance);
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task<List<Attendance>> GetAttendancesAsync(int? teamId, DateTime? eventDate, string? status)
+    {
+        var query = _context.Attendances
+            .Include(a => a.Student)
+            .AsQueryable();
+
+        if (teamId.HasValue)
+        {
+            query = query.Where(a => a.Student!.TeamId == teamId.Value);
+        }
+
+        if (eventDate.HasValue)
+        {
+            var date = eventDate.Value.Date;
+            query = query.Where(a => a.EventDate.Date == date);
+        }
+
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            query = query.Where(a => a.Status == status);
+        }
+
+        return await query
+            .OrderBy(a => a.EventDate)
+            .ThenBy(a => a.Student!.Name)
+            .ToListAsync();
     }
 
     public async Task<List<JudgeScore>> GetScoresForTeamAsync(int teamId)
@@ -161,9 +236,59 @@ public sealed class NasaSpaceAppsRepository : INasaSpaceAppsRepository
             .ToListAsync();
     }
 
+    // ---- Staff ----
+
+    public async Task<Staff?> GetStaffByIdentifierAsync(string identifier)
+    {
+        var normalized = identifier.Trim().ToUpper();
+        return await _context.Staff
+            .Include(s => s.Judge)
+            .FirstOrDefaultAsync(s =>
+                s.Username.ToUpper() == normalized ||
+                s.Email.ToUpper() == normalized);
+    }
+
+    public async Task<Staff?> GetStaffByIdAsync(int staffId)
+    {
+        return await _context.Staff
+            .Include(s => s.Judge)
+            .FirstOrDefaultAsync(s => s.StaffId == staffId);
+    }
+
+    public async Task<List<Staff>> GetStaffsAsync(string? role = null, string? search = null)
+    {
+        var query = _context.Staff.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(role))
+        {
+            query = query.Where(s => s.Role == role);
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var normalized = search.Trim().ToUpper();
+            query = query.Where(s =>
+                s.FullName.ToUpper().Contains(normalized) ||
+                s.Username.ToUpper().Contains(normalized) ||
+                s.Email.ToUpper().Contains(normalized));
+        }
+
+        return await query.OrderBy(s => s.FullName).ToListAsync();
+    }
+
+    public async Task<Staff> AddStaffAsync(Staff staff)
+    {
+        _context.Staff.Add(staff);
+        await _context.SaveChangesAsync();
+        return staff;
+    }
+
+    // ---- Questions ----
+
     public async Task<Question?> GetQuestionByIdAsync(int id)
     {
         return await _context.Questions
+            .Include(q => q.Challenge)
             .FirstOrDefaultAsync(question => question.QuestionId == id);
     }
 
@@ -175,11 +300,80 @@ public sealed class NasaSpaceAppsRepository : INasaSpaceAppsRepository
             .ToListAsync();
     }
 
+    public async Task<List<Question>> GetPublishedQuestionsAsync(int? challengeId = null)
+    {
+        var query = _context.Questions.Where(q => q.IsPublished && q.IsActive);
+
+        if (challengeId.HasValue)
+        {
+            query = query.Where(q => q.ChallengeId == challengeId.Value);
+        }
+
+        return await query.OrderBy(q => q.QuestionId).ToListAsync();
+    }
+
+    public async Task<List<Question>> GetAllQuestionsAsync(int? challengeId = null)
+    {
+        var query = _context.Questions.Where(q => q.IsActive);
+
+        if (challengeId.HasValue)
+        {
+            query = query.Where(q => q.ChallengeId == challengeId.Value);
+        }
+
+        return await query.OrderBy(q => q.QuestionId).ToListAsync();
+    }
+
+    public async Task<Question> AddQuestionAsync(Question question)
+    {
+        _context.Questions.Add(question);
+        await _context.SaveChangesAsync();
+        return question;
+    }
+
+    public async Task UpdateQuestionAsync(Question question)
+    {
+        _context.Questions.Update(question);
+        await _context.SaveChangesAsync();
+    }
+
+    // ---- Game (side trophy) ----
+
     public async Task<List<GameParticipation>> GetParticipationsAsync(int questionId)
     {
         return await _context.GameParticipations
             .Where(participation => participation.QuestionId == questionId)
             .OrderByDescending(participation => participation.SubmittedAt)
             .ToListAsync();
+    }
+
+    public async Task<GameParticipation?> GetParticipationAsync(int questionId, int teamId)
+    {
+        return await _context.GameParticipations
+            .FirstOrDefaultAsync(p => p.QuestionId == questionId && p.TeamId == teamId);
+    }
+
+    public async Task<GameParticipation> AddParticipationAsync(GameParticipation participation)
+    {
+        _context.GameParticipations.Add(participation);
+        await _context.SaveChangesAsync();
+        return participation;
+    }
+
+    public async Task<Dictionary<int, (int CorrectCount, int TotalPoints)>> GetTeamGameTotalsAsync()
+    {
+        var participations = await _context.GameParticipations
+            .Include(p => p.Question)
+            .ToListAsync();
+
+        return participations
+            .Where(p => p.Question != null)
+            .GroupBy(p => p.TeamId)
+            .ToDictionary(
+                g => g.Key,
+                g => (
+                    CorrectCount: g.Count(p => p.Correct),
+                    TotalPoints: g.Where(p => p.Correct).Sum(p => p.Question!.Points)
+                ));
     }
 }

@@ -1,0 +1,11 @@
+namespace NasaSpaceApps.Application.Services;
+
+public sealed record LoginResponse(
+    string AccessToken,
+    string Role,
+    string Name,
+    int? TeamId = null,
+    string? Username = null,
+    string? Email = null,
+    int? StaffId = null,
+    int? JudgeId = null);
