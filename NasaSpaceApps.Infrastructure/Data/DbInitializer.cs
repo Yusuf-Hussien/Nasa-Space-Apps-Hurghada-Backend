@@ -8,17 +8,37 @@ public static class DbInitializer
 {
     public static void Initialize(NasaSpaceAppsDbContext context)
     {
-        // Handle schema evolution: if new tables/columns are missing (added after
-        // the initial EnsureCreated), create them via raw SQL. Avoids
-        // drop-and-recreate which requires elevated permissions on shared hosts.
-        EnsureSchema(context);
-        context.Database.EnsureCreated();
-
-        if (context.Challenges.Any())
+        // InMemory provider: EF creates the schema from the model automatically.
+        // SQL Server: create tables via IF NOT EXISTS raw SQL — never call
+        // EnsureCreated()/EnsureDeleted() because shared hosts (e.g. ASPMonster)
+        // often lack CREATE DATABASE / DROP DATABASE permission.
+        if (!context.Database.IsRelational())
         {
+            context.Database.EnsureCreated();
+        }
+        else
+        {
+            CreateTablesIfNotExists(context);
+        }
+
+        try
+        {
+            if (context.Challenges.Any())
+            {
+                return;
+            }
+        }
+        catch
+        {
+            // Database unreachable or table missing — skip seeding
             return;
         }
 
+        Seed(context);
+    }
+
+    private static void Seed(NasaSpaceAppsDbContext context)
+    {
         var challenge = new Challenge
         {
             Title = "Mars Habitat Challenge",
@@ -65,7 +85,6 @@ public static class DbInitializer
 
         var project1 = new Project { Title = "Lunar Habitat Planner", Description = "Simulation planner", RepositoryLink = "https://example.com/repo1", DemoLink = "https://example.com/demo1", Team = team1 };
         var project2 = new Project { Title = "Mission Control Dashboard", Description = "Ops dashboard", RepositoryLink = "https://example.com/repo2", DemoLink = "https://example.com/demo2", Team = team2 };
-
         context.Projects.AddRange(project1, project2);
 
         var student1 = new Student { Name = "Aisha Ali", Team = team1, Email = "aisha@example.com", Contact = "555-1001", Status = "Active" };
@@ -77,7 +96,6 @@ public static class DbInitializer
         context.SponsorTiers.Add(tier);
         context.Sponsors.Add(new Sponsor { Name = "NASA Partner", Tier = tier, Active = true, DisplayOrder = 1, Logo = "https://example.com/logo.png", Link = "https://example.com" });
 
-        // Staff accounts: Admin, CoreTeam, Judge (one login pool for all non-participant roles)
         var admin = new Staff
         {
             FullName = "Event Admin",
@@ -111,7 +129,6 @@ public static class DbInitializer
 
         context.Staff.AddRange(admin, coreTeam, judgeStaff);
 
-        // Sample questions for the side trophy game
         var question1 = new Question
         {
             Challenge = challenge,
@@ -138,7 +155,6 @@ public static class DbInitializer
         };
 
         context.Questions.AddRange(question1, question2);
-
         context.SaveChanges();
 
         var team1Score1 = new JudgeScore { TeamId = team1.TeamId, JudgeId = judge.JudgeId, CriterionId = criteria[0].CriterionId, Score = 9.5m, Comment = "Strong concept" };
@@ -151,34 +167,57 @@ public static class DbInitializer
     }
 
     /// <summary>
-    /// Creates any tables/columns that were added after the initial EnsureCreated.
-    /// Uses raw SQL so it works on shared SQL Server hosts without CREATE DATABASE
-    /// permission. No-ops on the InMemory provider.
+    /// Creates every table, index, and new column via IF NOT EXISTS raw SQL.
+    /// Runs inside the existing database — never attempts CREATE/DROP DATABASE.
     /// </summary>
-    private static void EnsureSchema(NasaSpaceAppsDbContext context)
+    private static void CreateTablesIfNotExists(NasaSpaceAppsDbContext context)
     {
-        // Only applicable to relational (SQL Server) providers
-        if (!context.Database.IsRelational())
-        {
-            return;
-        }
-
-        var conn = context.Database.GetDbConnection();
-
         try
         {
-            conn.Open();
+            context.Database.ExecuteSqlRaw(SqlSchemaScript);
         }
         catch
         {
-            // InMemory or connection not ready yet — EnsureCreated will handle it
-            return;
+            // Tables already exist, or database is unreachable — non-fatal
         }
+    }
 
-        using var command = conn.CreateCommand();
+    private const string SqlSchemaScript = @"
+-- ============ Challenges ============
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Challenges')
+CREATE TABLE [Challenges] (
+    [ChallengeId] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    [Title] NVARCHAR(200) NOT NULL,
+    [Description] NVARCHAR(MAX) NULL,
+    [Source] NVARCHAR(200) NULL,
+    [Season] NVARCHAR(50) NULL,
+    [Metadata] NVARCHAR(MAX) NULL
+);
 
-        // --- Staff table ---
-        command.CommandText = @"
+-- ============ Teams ============
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Teams')
+CREATE TABLE [Teams] (
+    [TeamId] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    [Name] NVARCHAR(200) NOT NULL,
+    [Username] NVARCHAR(100) NOT NULL,
+    [PasswordHash] NVARCHAR(500) NOT NULL,
+    [ChallengeId] INT NOT NULL,
+    [Status] NVARCHAR(50) NOT NULL DEFAULT 'Active',
+    CONSTRAINT [FK_Teams_Challenges] FOREIGN KEY ([ChallengeId]) REFERENCES [Challenges]([ChallengeId]) ON DELETE CASCADE
+);
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Teams_Username' AND object_id = OBJECT_ID('Teams'))
+CREATE UNIQUE INDEX [IX_Teams_Username] ON [Teams]([Username]);
+
+-- ============ Judges ============
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Judges')
+CREATE TABLE [Judges] (
+    [JudgeId] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    [Name] NVARCHAR(200) NOT NULL,
+    [Account] NVARCHAR(200) NULL,
+    [Role] NVARCHAR(100) NULL
+);
+
+-- ============ Staff ============
 IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Staff')
 BEGIN
     CREATE TABLE [Staff] (
@@ -195,57 +234,159 @@ BEGIN
     );
     CREATE UNIQUE INDEX [IX_Staff_Username] ON [Staff]([Username]);
     CREATE UNIQUE INDEX [IX_Staff_Email] ON [Staff]([Email]);
-END";
+END
 
-        try
-        {
-            command.ExecuteNonQuery();
-        }
-        catch
-        {
-            // InMemory provider or non-SQL — skip
-            return;
-        }
+-- ============ Students ============
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Students')
+CREATE TABLE [Students] (
+    [StudentId] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    [TeamId] INT NOT NULL,
+    [Name] NVARCHAR(200) NOT NULL,
+    [Email] NVARCHAR(200) NULL,
+    [Contact] NVARCHAR(100) NULL,
+    [Status] NVARCHAR(50) NULL,
+    CONSTRAINT [FK_Students_Teams] FOREIGN KEY ([TeamId]) REFERENCES [Teams]([TeamId]) ON DELETE CASCADE
+);
 
-        // --- Question: new columns for publishing / side-trophy ---
-        AddColumnIfMissing(context, "Questions", "IsPublished", "BIT NOT NULL DEFAULT 0");
-        AddColumnIfMissing(context, "Questions", "PublishedAt", "DATETIME2 NULL");
-        AddColumnIfMissing(context, "Questions", "Points", "INT NOT NULL DEFAULT 10");
-        AddColumnIfMissing(context, "Questions", "IsActive", "BIT NOT NULL DEFAULT 1");
+-- ============ Projects ============
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Projects')
+CREATE TABLE [Projects] (
+    [ProjectId] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    [TeamId] INT NOT NULL,
+    [Title] NVARCHAR(200) NOT NULL,
+    [Description] NVARCHAR(MAX) NULL,
+    [RepositoryLink] NVARCHAR(500) NULL,
+    [DemoLink] NVARCHAR(500) NULL,
+    CONSTRAINT [FK_Projects_Teams] FOREIGN KEY ([TeamId]) REFERENCES [Teams]([TeamId]) ON DELETE CASCADE
+);
 
-        // --- Attendance: unique index for upsert semantics ---
-        try
-        {
-            using var cmd2 = conn.CreateCommand();
-            cmd2.CommandText = @"
-IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Attendances_StudentId_EventDate' AND object_id = OBJECT_ID('Attendances'))
+-- ============ JudgingCriteria ============
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'JudgingCriteria')
+CREATE TABLE [JudgingCriteria] (
+    [CriterionId] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    [Name] NVARCHAR(200) NOT NULL,
+    [Description] NVARCHAR(MAX) NULL,
+    [MaxScore] DECIMAL(18,2) NOT NULL,
+    [Weight] DECIMAL(18,2) NOT NULL
+);
+
+-- ============ JudgeScores ============
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'JudgeScores')
+CREATE TABLE [JudgeScores] (
+    [ScoreId] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    [TeamId] INT NOT NULL,
+    [JudgeId] INT NOT NULL,
+    [CriterionId] INT NOT NULL,
+    [Score] DECIMAL(18,2) NOT NULL,
+    [Comment] NVARCHAR(MAX) NULL,
+    [Timestamp] DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    CONSTRAINT [FK_JudgeScores_Teams] FOREIGN KEY ([TeamId]) REFERENCES [Teams]([TeamId]) ON DELETE CASCADE,
+    CONSTRAINT [FK_JudgeScores_Judges] FOREIGN KEY ([JudgeId]) REFERENCES [Judges]([JudgeId]) ON DELETE CASCADE,
+    CONSTRAINT [FK_JudgeScores_Criteria] FOREIGN KEY ([CriterionId]) REFERENCES [JudgingCriteria]([CriterionId]) ON DELETE CASCADE
+);
+
+-- ============ Attendances ============
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Attendances')
+BEGIN
+    CREATE TABLE [Attendances] (
+        [AttendanceId] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        [StudentId] INT NOT NULL,
+        [EventDate] DATETIME2 NOT NULL,
+        [Status] NVARCHAR(50) NOT NULL,
+        [MarkedBy] NVARCHAR(200) NULL,
+        [Timestamp] DATETIME2 NOT NULL DEFAULT GETUTCDATE()
+    );
     CREATE UNIQUE INDEX [IX_Attendances_StudentId_EventDate] ON [Attendances]([StudentId], [EventDate]);
-IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_GameParticipations_QuestionId_TeamId' AND object_id = OBJECT_ID('GameParticipations'))
-    CREATE UNIQUE INDEX [IX_GameParticipations_QuestionId_TeamId] ON [GameParticipations]([QuestionId], [TeamId]);";
-            cmd2.ExecuteNonQuery();
-        }
-        catch
-        {
-            // ignore — indexes are non-critical
-        }
-    }
+END
+ELSE
+BEGIN
+    IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Attendances_StudentId_EventDate' AND object_id = OBJECT_ID('Attendances'))
+    CREATE UNIQUE INDEX [IX_Attendances_StudentId_EventDate] ON [Attendances]([StudentId], [EventDate]);
+END
 
-    private static void AddColumnIfMissing(NasaSpaceAppsDbContext context, string table, string column, string definition)
-    {
-        try
-        {
-            using var cmd = context.Database.GetDbConnection().CreateCommand();
-            cmd.CommandText = $@"
-IF NOT EXISTS (
-    SELECT * FROM sys.columns
-    WHERE object_id = OBJECT_ID('{table}') AND name = '{column}'
-)
-    ALTER TABLE [{table}] ADD [{column}] {definition}";
-            cmd.ExecuteNonQuery();
-        }
-        catch
-        {
-            // ignore
-        }
-    }
+-- ============ ServiceRequests ============
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'ServiceRequests')
+CREATE TABLE [ServiceRequests] (
+    [RequestId] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    [TeamId] INT NOT NULL,
+    [Type] NVARCHAR(100) NOT NULL,
+    [Message] NVARCHAR(MAX) NOT NULL,
+    [Status] NVARCHAR(50) NOT NULL DEFAULT 'Pending',
+    [CreatedAt] DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    [ResolvedAt] DATETIME2 NULL,
+    CONSTRAINT [FK_ServiceRequests_Teams] FOREIGN KEY ([TeamId]) REFERENCES [Teams]([TeamId]) ON DELETE CASCADE
+);
+
+-- ============ Questions ============
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Questions')
+BEGIN
+    CREATE TABLE [Questions] (
+        [QuestionId] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        [ChallengeId] INT NOT NULL,
+        [Type] NVARCHAR(50) NOT NULL,
+        [Text] NVARCHAR(MAX) NOT NULL,
+        [Options] NVARCHAR(MAX) NULL,
+        [CorrectAnswer] NVARCHAR(MAX) NULL,
+        [IsPublished] BIT NOT NULL DEFAULT 0,
+        [PublishedAt] DATETIME2 NULL,
+        [Points] INT NOT NULL DEFAULT 10,
+        [IsActive] BIT NOT NULL DEFAULT 1,
+        CONSTRAINT [FK_Questions_Challenges] FOREIGN KEY ([ChallengeId]) REFERENCES [Challenges]([ChallengeId]) ON DELETE CASCADE
+    );
+END
+ELSE
+BEGIN
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Questions') AND name = 'IsPublished')
+        ALTER TABLE [Questions] ADD [IsPublished] BIT NOT NULL DEFAULT 0;
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Questions') AND name = 'PublishedAt')
+        ALTER TABLE [Questions] ADD [PublishedAt] DATETIME2 NULL;
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Questions') AND name = 'Points')
+        ALTER TABLE [Questions] ADD [Points] INT NOT NULL DEFAULT 10;
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Questions') AND name = 'IsActive')
+        ALTER TABLE [Questions] ADD [IsActive] BIT NOT NULL DEFAULT 1;
+END
+
+-- ============ GameParticipations ============
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'GameParticipations')
+BEGIN
+    CREATE TABLE [GameParticipations] (
+        [ParticipationId] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        [QuestionId] INT NOT NULL,
+        [TeamId] INT NOT NULL,
+        [Answer] NVARCHAR(MAX) NULL,
+        [Correct] BIT NOT NULL DEFAULT 0,
+        [SubmittedAt] DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+        CONSTRAINT [FK_GameParticipations_Questions] FOREIGN KEY ([QuestionId]) REFERENCES [Questions]([QuestionId]) ON DELETE NO ACTION,
+        CONSTRAINT [FK_GameParticipations_Teams] FOREIGN KEY ([TeamId]) REFERENCES [Teams]([TeamId]) ON DELETE CASCADE
+    );
+    CREATE UNIQUE INDEX [IX_GameParticipations_QuestionId_TeamId] ON [GameParticipations]([QuestionId], [TeamId]);
+END
+ELSE
+BEGIN
+    IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_GameParticipations_QuestionId_TeamId' AND object_id = OBJECT_ID('GameParticipations'))
+    CREATE UNIQUE INDEX [IX_GameParticipations_QuestionId_TeamId] ON [GameParticipations]([QuestionId], [TeamId]);
+END
+
+-- ============ SponsorTiers ============
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'SponsorTiers')
+CREATE TABLE [SponsorTiers] (
+    [TierId] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    [Name] NVARCHAR(200) NOT NULL,
+    [Priority] INT NULL,
+    [BannerEnabled] BIT NOT NULL DEFAULT 0
+);
+
+-- ============ Sponsors ============
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Sponsors')
+CREATE TABLE [Sponsors] (
+    [SponsorId] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    [Name] NVARCHAR(200) NOT NULL,
+    [Logo] NVARCHAR(500) NULL,
+    [Link] NVARCHAR(500) NULL,
+    [TierId] INT NOT NULL,
+    [Active] BIT NOT NULL DEFAULT 0,
+    [DisplayOrder] INT NULL,
+    CONSTRAINT [FK_Sponsors_Tiers] FOREIGN KEY ([TierId]) REFERENCES [SponsorTiers]([TierId]) ON DELETE CASCADE
+);
+";
 }

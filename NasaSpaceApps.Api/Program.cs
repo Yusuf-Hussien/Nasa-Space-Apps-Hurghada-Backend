@@ -96,8 +96,17 @@ var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
 {
-    var db = scope.ServiceProvider.GetRequiredService<NasaSpaceAppsDbContext>();
-    DbInitializer.Initialize(db);
+    try
+    {
+        var db = scope.ServiceProvider.GetRequiredService<NasaSpaceAppsDbContext>();
+        DbInitializer.Initialize(db);
+    }
+    catch (Exception ex)
+    {
+        // Log but don't crash — app can still start and serve Swagger etc.
+        var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("DbInitializer");
+        logger.LogError(ex, "Database initialization failed. The API will start but database endpoints may not work.");
+    }
 }
 
 if (app.Environment.IsDevelopment())
