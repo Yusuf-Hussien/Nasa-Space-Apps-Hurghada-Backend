@@ -1,0 +1,37 @@
+# .NET build output
+[Bb]in/
+[Oo]bj/
+.vs/
+TestResults/
+
+# User-specific IDE files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+appsettings.Local.json
+appsettings.*.Local.json
+secrets.json
+
+# Local .NET user secrets are stored outside the repository
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+*.swp
+
+# Coverage and profiling output
+coverage/
+.coverage
+*.coverage
+*.coveragexml
+
+# OS files
+.DS_Store
+Thumbs.db

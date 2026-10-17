@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="NasaSpaceApps.Api.Tests/NasaSpaceApps.Api.Tests.csproj" />
+  <Project Path="NasaSpaceApps.Api/NasaSpaceApps.Api.csproj" />
+  <Project Path="NasaSpaceApps.Application.Tests/NasaSpaceApps.Application.Tests.csproj" />
+  <Project Path="NasaSpaceApps.Application/NasaSpaceApps.Application.csproj" />
+  <Project Path="NasaSpaceApps.Domain/NasaSpaceApps.Domain.csproj" />
+  <Project Path="NasaSpaceApps.Infrastructure/NasaSpaceApps.Infrastructure.csproj" />
+</Solution>
