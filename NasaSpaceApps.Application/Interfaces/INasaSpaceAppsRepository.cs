@@ -17,6 +17,7 @@ public interface INasaSpaceAppsRepository
     Task<ServiceRequest?> GetRequestByIdAsync(int requestId);
     Task<ServiceRequest> AddRequestAsync(ServiceRequest request);
     Task UpdateRequestAsync(ServiceRequest request);
+    Task DeleteRequestAsync(ServiceRequest request);
     Task<Attendance> AddAttendanceAsync(Attendance attendance);
     Task<Attendance?> GetAttendanceForStudentDateAsync(int studentId, DateTime eventDate);
     Task UpdateAttendanceAsync(Attendance attendance);

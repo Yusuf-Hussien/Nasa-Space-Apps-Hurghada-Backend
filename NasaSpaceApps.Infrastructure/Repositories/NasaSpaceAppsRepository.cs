@@ -136,6 +136,12 @@ public sealed class NasaSpaceAppsRepository : INasaSpaceAppsRepository
         await _context.SaveChangesAsync();
     }
 
+    public async Task DeleteRequestAsync(ServiceRequest request)
+    {
+        _context.ServiceRequests.Remove(request);
+        await _context.SaveChangesAsync();
+    }
+
     public async Task<Attendance> AddAttendanceAsync(Attendance attendance)
     {
         _context.Attendances.Add(attendance);

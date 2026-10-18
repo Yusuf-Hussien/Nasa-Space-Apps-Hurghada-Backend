@@ -55,12 +55,24 @@ public sealed class RequestService
 
         if (!string.Equals(status, "In Progress", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(status, "Resolved", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(status, "Rejected", StringComparison.OrdinalIgnoreCase))
+            !string.Equals(status, "Rejected", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(status, "Done", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(status, "Cancelled", StringComparison.OrdinalIgnoreCase))
         {
-            return Result<ServiceRequest>.Failure("request.invalid_status", 400, "Status must be In Progress, Resolved, or Rejected.");
+            return Result<ServiceRequest>.Failure("request.invalid_status", 400, "Status must be In Progress, Resolved, Rejected, Done, or Cancelled.");
         }
 
-        request.Status = char.ToUpper(status[0]) + status[1..].ToLower();
+        var normalized = status.Trim();
+        if (string.Equals(normalized, "Done", StringComparison.OrdinalIgnoreCase))
+        {
+            normalized = "Resolved";
+        }
+        else if (string.Equals(normalized, "Cancelled", StringComparison.OrdinalIgnoreCase))
+        {
+            normalized = "Rejected";
+        }
+
+        request.Status = char.ToUpper(normalized[0]) + normalized[1..].ToLower();
         if (string.Equals(request.Status, "Resolved", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(request.Status, "Rejected", StringComparison.OrdinalIgnoreCase))
         {
@@ -69,5 +81,22 @@ public sealed class RequestService
 
         await _repository.UpdateRequestAsync(request);
         return Result<ServiceRequest>.Success(request);
+    }
+
+    public async Task<Result<bool>> DeleteRequestAsync(int requestId, int? teamId = null, bool isStaff = false)
+    {
+        var request = await _repository.GetRequestByIdAsync(requestId);
+        if (request is null)
+        {
+            return Result<bool>.Failure("request.not_found", 404, "Request not found.");
+        }
+
+        if (!isStaff && teamId.HasValue && request.TeamId != teamId.Value)
+        {
+            return Result<bool>.Failure("request.forbidden", 403, "You can only delete your own team's requests.");
+        }
+
+        await _repository.DeleteRequestAsync(request);
+        return Result<bool>.Success(true);
     }
 }

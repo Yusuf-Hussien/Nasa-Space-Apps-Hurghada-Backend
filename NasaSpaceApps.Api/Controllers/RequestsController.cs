@@ -102,4 +102,17 @@ public class RequestsController : ControllerBase
             resolvedAt = result.Value.ResolvedAt
         });
     }
+
+    [HttpDelete("{requestId:int}")]
+    public async Task<ActionResult> DeleteRequest(int requestId)
+    {
+        var teamId = _currentUser.IsStaff ? (int?)null : _currentUser.TeamId;
+        var result = await _requestService.DeleteRequestAsync(requestId, teamId, _currentUser.IsStaff);
+        if (!result.IsSuccess)
+        {
+            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
+        }
+
+        return Ok(new { requestId, deleted = true });
+    }
 }
