@@ -26,7 +26,15 @@ public interface INasaSpaceAppsRepository
     Task<JudgingCriterion?> GetJudgingCriterionByIdAsync(int criterionId);
     Task AddJudgeScoreAsync(JudgeScore score);
     Task<List<Sponsor>> GetSponsorsAsync(bool activeOnly = true);
+    Task<Sponsor?> GetSponsorByIdAsync(int sponsorId);
     Task<List<SponsorTier>> GetSponsorTiersAsync();
+    Task<SponsorTier?> GetSponsorTierByIdAsync(int tierId);
+    Task<Sponsor> AddSponsorAsync(Sponsor sponsor);
+    Task UpdateSponsorAsync(Sponsor sponsor);
+    Task DeleteSponsorAsync(Sponsor sponsor);
+    Task<SponsorTier> AddSponsorTierAsync(SponsorTier tier);
+    Task UpdateSponsorTierAsync(SponsorTier tier);
+    Task DeleteSponsorTierAsync(SponsorTier tier);
 
     // Staff (Admin / CoreTeam / Judge login pool)
     Task<Staff?> GetStaffByIdentifierAsync(string identifier);

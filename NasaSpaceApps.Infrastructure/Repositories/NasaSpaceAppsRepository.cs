@@ -225,7 +225,15 @@ public sealed class NasaSpaceAppsRepository : INasaSpaceAppsRepository
 
         return await query
             .OrderBy(sponsor => sponsor.DisplayOrder ?? int.MaxValue)
+            .ThenBy(sponsor => sponsor.SponsorId)
             .ToListAsync();
+    }
+
+    public async Task<Sponsor?> GetSponsorByIdAsync(int sponsorId)
+    {
+        return await _context.Sponsors
+            .Include(sponsor => sponsor.Tier)
+            .FirstOrDefaultAsync(sponsor => sponsor.SponsorId == sponsorId);
     }
 
     public async Task<List<SponsorTier>> GetSponsorTiersAsync()
@@ -233,7 +241,52 @@ public sealed class NasaSpaceAppsRepository : INasaSpaceAppsRepository
         return await _context.SponsorTiers
             .Include(tier => tier.Sponsors)
             .OrderBy(tier => tier.Priority ?? int.MaxValue)
+            .ThenBy(tier => tier.TierId)
             .ToListAsync();
+    }
+
+    public async Task<SponsorTier?> GetSponsorTierByIdAsync(int tierId)
+    {
+        return await _context.SponsorTiers
+            .FirstOrDefaultAsync(tier => tier.TierId == tierId);
+    }
+
+    public async Task<Sponsor> AddSponsorAsync(Sponsor sponsor)
+    {
+        _context.Sponsors.Add(sponsor);
+        await _context.SaveChangesAsync();
+        return sponsor;
+    }
+
+    public async Task UpdateSponsorAsync(Sponsor sponsor)
+    {
+        _context.Sponsors.Update(sponsor);
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task DeleteSponsorAsync(Sponsor sponsor)
+    {
+        _context.Sponsors.Remove(sponsor);
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task<SponsorTier> AddSponsorTierAsync(SponsorTier tier)
+    {
+        _context.SponsorTiers.Add(tier);
+        await _context.SaveChangesAsync();
+        return tier;
+    }
+
+    public async Task UpdateSponsorTierAsync(SponsorTier tier)
+    {
+        _context.SponsorTiers.Update(tier);
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task DeleteSponsorTierAsync(SponsorTier tier)
+    {
+        _context.SponsorTiers.Remove(tier);
+        await _context.SaveChangesAsync();
     }
 
     // ---- Staff ----
