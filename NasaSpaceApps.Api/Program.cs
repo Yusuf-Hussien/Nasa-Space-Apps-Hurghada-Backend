@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using FluentValidation.AspNetCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -6,6 +6,7 @@ using Microsoft.IdentityModel.Tokens;
 using NasaSpaceApps.Api.Common;
 using NasaSpaceApps.Application.Common;
 using NasaSpaceApps.Application.Interfaces;
+using NasaSpaceApps.Application.Models;
 using NasaSpaceApps.Application.Services;
 using NasaSpaceApps.Domain.Entities;
 using NasaSpaceApps.Infrastructure.Data;
@@ -56,7 +57,7 @@ builder.Services.AddScoped<QuestionService>();
 builder.Services.AddScoped<GameService>();
 builder.Services.AddScoped<StaffService>();
 
-// CORS — allow all origins for now; restrict after deployment
+// CORS: allow all origins for now; restrict after deployment
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy => policy
@@ -65,9 +66,8 @@ builder.Services.AddCors(options =>
         .AllowAnyMethod());
 });
 
-var jwtKey = builder.Configuration["Jwt:Key"] ?? "ThisIsADevelopmentJwtSigningKey1234567890";
-var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "NasaSpaceApps";
-var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "NasaSpaceApps.Client";
+var jwtOptions = JwtOptions.FromConfiguration(builder.Configuration);
+builder.Services.AddSingleton(jwtOptions);
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -78,9 +78,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = jwtIssuer,
-            ValidAudience = jwtAudience,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
+            ValidIssuer = jwtOptions.Issuer,
+            ValidAudience = jwtOptions.Audience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.Key))
         };
     });
 
@@ -104,7 +104,7 @@ using (var scope = app.Services.CreateScope())
     }
     catch (Exception ex)
     {
-        // Log but don't crash — app can still start and serve Swagger etc.
+        // Log but do not crash: the app can still start and serve Swagger etc.
         var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("DbInitializer");
         logger.LogError(ex, "Database initialization failed. The API will start but database endpoints may not work.");
     }

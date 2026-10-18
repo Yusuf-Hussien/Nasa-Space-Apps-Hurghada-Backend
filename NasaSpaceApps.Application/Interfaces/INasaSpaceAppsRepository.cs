@@ -1,3 +1,4 @@
+﻿using NasaSpaceApps.Application.Models;
 using NasaSpaceApps.Application.Services;
 using NasaSpaceApps.Domain.Entities;
 
@@ -24,7 +25,7 @@ public interface INasaSpaceAppsRepository
     Task UpdateAttendanceAsync(Attendance attendance);
     Task<List<Attendance>> GetAttendancesAsync(int? teamId, DateTime? eventDate, string? status);
     Task<List<JudgeScore>> GetScoresForTeamAsync(int teamId);
-    Task<List<TeamStandingsEntry>> GetTeamStandingsAsync();
+    Task<List<JudgeScore>> GetAllScoresAsync();
     Task<List<JudgingCriterion>> GetJudgingCriteriaAsync();
     Task<JudgingCriterion?> GetJudgingCriterionByIdAsync(int criterionId);
     Task AddJudgeScoreAsync(JudgeScore score);

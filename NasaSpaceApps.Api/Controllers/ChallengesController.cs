@@ -1,4 +1,5 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
+using NasaSpaceApps.Api.Common;
 using NasaSpaceApps.Application.Services;
 
 namespace NasaSpaceApps.Api.Controllers;
@@ -15,40 +16,16 @@ public class ChallengesController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult> GetChallenges()
+    public async Task<ActionResult<List<ChallengeResponse>>> GetChallenges()
     {
         var result = await _challengeService.GetChallengesAsync();
-        if (!result.IsSuccess)
-        {
-            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
-        }
-
-        return Ok(result.Value!.Select(challenge => new
-        {
-            challengeId = challenge.ChallengeId,
-            title = challenge.Title,
-            description = challenge.Description,
-            source = challenge.Source,
-            season = challenge.Season
-        }));
+        return result.ToHttpResult(this, challenges => challenges.Select(ChallengeResponse.From).ToList());
     }
 
     [HttpGet("{challengeId:int}")]
-    public async Task<ActionResult> GetChallenge(int challengeId)
+    public async Task<ActionResult<ChallengeResponse>> GetChallenge(int challengeId)
     {
         var result = await _challengeService.GetChallengeAsync(challengeId);
-        if (!result.IsSuccess)
-        {
-            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
-        }
-
-        return Ok(new
-        {
-            challengeId = result.Value!.ChallengeId,
-            title = result.Value.Title,
-            description = result.Value.Description,
-            source = result.Value.Source,
-            season = result.Value.Season
-        });
+        return result.ToHttpResult(this, ChallengeResponse.From);
     }
 }

@@ -1,5 +1,6 @@
-namespace NasaSpaceApps.Application.Services;
+namespace NasaSpaceApps.Application.Models;
 
+/// <summary>Create payload for a staff account.</summary>
 public sealed record StaffInput(
     string FullName,
     string Username,

@@ -1,6 +1,8 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NasaSpaceApps.Api.Common;
 using NasaSpaceApps.Application.Common;
+using NasaSpaceApps.Application.Models;
 using NasaSpaceApps.Application.Services;
 
 namespace NasaSpaceApps.Api.Controllers;
@@ -18,44 +20,21 @@ public class GameController : ControllerBase
         _currentUser = currentUser;
     }
 
-    /// <summary>Side trophy leaderboard — public so spectators can view it.</summary>
+    /// <summary>Side trophy leaderboard. Public so spectators can view it.</summary>
     [AllowAnonymous]
     [HttpGet("leaderboard")]
-    public async Task<ActionResult> GetLeaderboard()
+    public async Task<ActionResult<List<LeaderboardRow>>> GetLeaderboard()
     {
         var result = await _gameService.GetLeaderboardAsync();
-        if (!result.IsSuccess)
-        {
-            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
-        }
-
-        return Ok(result.Value!.Select(row => new
-        {
-            rank = row.Rank,
-            teamId = row.TeamId,
-            teamName = row.TeamName,
-            correctCount = row.CorrectCount,
-            totalPoints = row.TotalPoints,
-            isTied = row.IsTied
-        }));
+        return result.ToHttpResult(this);
     }
 
     /// <summary>Submit an answer to a published question (Participant only, one per team).</summary>
     [Authorize(Policy = "ParticipantOnly")]
     [HttpPost("questions/{questionId:int}/answer")]
-    public async Task<ActionResult> SubmitAnswer(int questionId, [FromBody] AnswerInput input)
+    public async Task<ActionResult<AnswerResult>> SubmitAnswer(int questionId, [FromBody] AnswerInput input)
     {
         var result = await _gameService.SubmitAnswerAsync(questionId, input.Answer, _currentUser);
-        if (!result.IsSuccess)
-        {
-            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
-        }
-
-        return Ok(new
-        {
-            correct = result.Value!.Correct,
-            points = result.Value.Points,
-            submittedAt = result.Value.SubmittedAt
-        });
+        return result.ToHttpResult(this);
     }
 }

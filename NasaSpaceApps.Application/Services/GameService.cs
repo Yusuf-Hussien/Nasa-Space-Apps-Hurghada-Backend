@@ -1,5 +1,6 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using NasaSpaceApps.Application.Common;
+using NasaSpaceApps.Application.Models;
 using NasaSpaceApps.Application.Interfaces;
 using NasaSpaceApps.Domain.Entities;
 

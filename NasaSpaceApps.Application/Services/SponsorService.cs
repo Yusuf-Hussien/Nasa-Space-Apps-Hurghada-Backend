@@ -1,4 +1,5 @@
-using NasaSpaceApps.Application.Common;
+﻿using NasaSpaceApps.Application.Common;
+using NasaSpaceApps.Application.Models;
 using NasaSpaceApps.Application.Interfaces;
 using NasaSpaceApps.Domain.Entities;
 
@@ -57,7 +58,7 @@ public sealed class SponsorService
         return Result<Sponsor>.Success(created);
     }
 
-    public async Task<Result<Sponsor>> UpdateSponsorAsync(int sponsorId, SponsorUpdateInput input)
+    public async Task<Result<Sponsor>> UpdateSponsorAsync(int sponsorId, SponsorInput input)
     {
         var sponsor = await _repository.GetSponsorByIdAsync(sponsorId);
         if (sponsor is null)
@@ -134,7 +135,7 @@ public sealed class SponsorService
         return Result<SponsorTier>.Success(created);
     }
 
-    public async Task<Result<SponsorTier>> UpdateSponsorTierAsync(int tierId, SponsorTierUpdateInput input)
+    public async Task<Result<SponsorTier>> UpdateSponsorTierAsync(int tierId, SponsorTierInput input)
     {
         var tier = await _repository.GetSponsorTierByIdAsync(tierId);
         if (tier is null)

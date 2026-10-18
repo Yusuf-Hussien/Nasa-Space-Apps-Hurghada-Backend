@@ -1,4 +1,4 @@
-using NasaSpaceApps.Domain.Entities;
+﻿using NasaSpaceApps.Domain.Entities;
 
 namespace NasaSpaceApps.Application.Services;
 
@@ -9,7 +9,17 @@ public sealed class TeamStanding
     public int? Rank { get; set; }
     public bool IsTied { get; set; }
     public decimal TotalScore { get; set; }
+
+    /// <summary>Per-criterion breakdown of how <see cref="TotalScore"/> was reached.</summary>
+    public List<TeamStandingScore> Scores { get; set; } = new();
 }
+
+/// <summary>A single criterion's contribution to a team's total.</summary>
+public sealed record TeamStandingScore(
+    int CriterionId,
+    string CriterionName,
+    decimal Score,
+    int JudgeId);
 
 public static class StandingsCalculator
 {

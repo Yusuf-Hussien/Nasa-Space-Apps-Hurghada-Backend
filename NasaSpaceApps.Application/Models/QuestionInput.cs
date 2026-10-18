@@ -1,5 +1,6 @@
-namespace NasaSpaceApps.Application.Services;
+namespace NasaSpaceApps.Application.Models;
 
+/// <summary>Create/update payload for a quiz question.</summary>
 public sealed record QuestionInput(
     int ChallengeId,
     string Type,

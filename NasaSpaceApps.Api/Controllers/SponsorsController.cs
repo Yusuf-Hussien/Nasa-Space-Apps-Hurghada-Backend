@@ -1,5 +1,7 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NasaSpaceApps.Api.Common;
+using NasaSpaceApps.Application.Models;
 using NasaSpaceApps.Application.Services;
 
 namespace NasaSpaceApps.Api.Controllers;
@@ -17,201 +19,81 @@ public class SponsorsController : ControllerBase
 
     [HttpGet]
     [AllowAnonymous]
-    public async Task<ActionResult> GetSponsors([FromQuery] bool includeInactive = false)
+    public async Task<ActionResult<List<SponsorResponse>>> GetSponsors([FromQuery] bool includeInactive = false)
     {
         var result = await _sponsorService.GetSponsorsAsync(includeInactive);
-        if (!result.IsSuccess)
-        {
-            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
-        }
-
-        return Ok(result.Value!.Select(sponsor => new
-        {
-            sponsorId = sponsor.SponsorId,
-            name = sponsor.Name,
-            logo = sponsor.Logo,
-            link = sponsor.Link,
-            tierId = sponsor.TierId,
-            tier = sponsor.Tier == null ? null : new { tierId = sponsor.Tier.TierId, name = sponsor.Tier.Name, priority = sponsor.Tier.Priority, bannerEnabled = sponsor.Tier.BannerEnabled },
-            active = sponsor.Active,
-            displayOrder = sponsor.DisplayOrder
-        }));
+        return result.ToHttpResult(this, sponsors => sponsors.Select(s => SponsorResponse.From(s)).ToList());
     }
 
     [HttpGet("{sponsorId:int}")]
     [AllowAnonymous]
-    public async Task<ActionResult> GetSponsor(int sponsorId)
+    public async Task<ActionResult<SponsorResponse>> GetSponsor(int sponsorId)
     {
         var result = await _sponsorService.GetSponsorByIdAsync(sponsorId);
-        if (!result.IsSuccess)
-        {
-            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
-        }
-
-        var sponsor = result.Value!;
-        return Ok(new
-        {
-            sponsorId = sponsor.SponsorId,
-            name = sponsor.Name,
-            logo = sponsor.Logo,
-            link = sponsor.Link,
-            tierId = sponsor.TierId,
-            tier = sponsor.Tier == null ? null : new { tierId = sponsor.Tier.TierId, name = sponsor.Tier.Name, priority = sponsor.Tier.Priority, bannerEnabled = sponsor.Tier.BannerEnabled },
-            active = sponsor.Active,
-            displayOrder = sponsor.DisplayOrder
-        });
+        return result.ToHttpResult(this, s => SponsorResponse.From(s));
     }
 
     [HttpPost]
     [Authorize(Policy = "AdminOnly")]
-    public async Task<ActionResult> AddSponsor([FromBody] SponsorInputDto input)
+    public async Task<ActionResult<SponsorResponse>> AddSponsor([FromBody] SponsorInput input)
     {
-        var result = await _sponsorService.AddSponsorAsync(new SponsorInput(
-            input.Name, input.Logo, input.Link, input.TierId, input.Active, input.DisplayOrder));
-        if (!result.IsSuccess)
-        {
-            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
-        }
-
-        var sponsor = result.Value!;
-        return Ok(new
-        {
-            sponsorId = sponsor.SponsorId,
-            name = sponsor.Name,
-            logo = sponsor.Logo,
-            link = sponsor.Link,
-            tierId = sponsor.TierId,
-            active = sponsor.Active,
-            displayOrder = sponsor.DisplayOrder
-        });
+        var result = await _sponsorService.AddSponsorAsync(input);
+        return result.ToHttpResult(this, s => SponsorResponse.From(s, includeTier: false));
     }
 
     [HttpPut("{sponsorId:int}")]
     [Authorize(Policy = "AdminOnly")]
-    public async Task<ActionResult> UpdateSponsor(int sponsorId, [FromBody] SponsorUpdateDto input)
+    public async Task<ActionResult<SponsorResponse>> UpdateSponsor(int sponsorId, [FromBody] SponsorInput input)
     {
-        var result = await _sponsorService.UpdateSponsorAsync(sponsorId, new SponsorUpdateInput(
-            input.Name, input.Logo, input.Link, input.TierId, input.Active, input.DisplayOrder));
-        if (!result.IsSuccess)
-        {
-            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
-        }
-
-        var sponsor = result.Value!;
-        return Ok(new
-        {
-            sponsorId = sponsor.SponsorId,
-            name = sponsor.Name,
-            logo = sponsor.Logo,
-            link = sponsor.Link,
-            tierId = sponsor.TierId,
-            active = sponsor.Active,
-            displayOrder = sponsor.DisplayOrder
-        });
+        var result = await _sponsorService.UpdateSponsorAsync(sponsorId, input);
+        return result.ToHttpResult(this, s => SponsorResponse.From(s, includeTier: false));
     }
 
     [HttpDelete("{sponsorId:int}")]
     [Authorize(Policy = "AdminOnly")]
-    public async Task<ActionResult> DeleteSponsor(int sponsorId)
+    public async Task<ActionResult<DeletedResponse>> DeleteSponsor(int sponsorId)
     {
         var result = await _sponsorService.DeleteSponsorAsync(sponsorId);
-        if (!result.IsSuccess)
-        {
-            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
-        }
-
-        return Ok(new { sponsorId, deleted = true });
+        return result.ToHttpResult(this, _ => DeletedResponse.Of(sponsorId));
     }
 
     [HttpGet("tiers")]
     [AllowAnonymous]
-    public async Task<ActionResult> GetSponsorTiers()
+    public async Task<ActionResult<List<SponsorTierResponse>>> GetSponsorTiers()
     {
         var result = await _sponsorService.GetSponsorTiersAsync();
-        if (!result.IsSuccess)
-        {
-            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
-        }
-
-        return Ok(result.Value!.Select(t => new
-        {
-            tierId = t.TierId,
-            name = t.Name,
-            priority = t.Priority,
-            bannerEnabled = t.BannerEnabled
-        }));
+        return result.ToHttpResult(this, tiers => tiers.Select(SponsorTierResponse.From).ToList());
     }
 
     [HttpGet("tiers/{tierId:int}")]
     [AllowAnonymous]
-    public async Task<ActionResult> GetSponsorTier(int tierId)
+    public async Task<ActionResult<SponsorTierResponse>> GetSponsorTier(int tierId)
     {
         var result = await _sponsorService.GetSponsorTierByIdAsync(tierId);
-        if (!result.IsSuccess)
-        {
-            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
-        }
-
-        var t = result.Value!;
-        return Ok(new
-        {
-            tierId = t.TierId,
-            name = t.Name,
-            priority = t.Priority,
-            bannerEnabled = t.BannerEnabled
-        });
+        return result.ToHttpResult(this, SponsorTierResponse.From);
     }
 
     [HttpPost("tiers")]
     [Authorize(Policy = "AdminOnly")]
-    public async Task<ActionResult> AddSponsorTier([FromBody] SponsorTierInputDto input)
+    public async Task<ActionResult<SponsorTierResponse>> AddSponsorTier([FromBody] SponsorTierInput input)
     {
-        var result = await _sponsorService.AddSponsorTierAsync(new SponsorTierInput(input.Name, input.Priority, input.BannerEnabled));
-        if (!result.IsSuccess)
-        {
-            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
-        }
-
-        var t = result.Value!;
-        return Ok(new
-        {
-            tierId = t.TierId,
-            name = t.Name,
-            priority = t.Priority,
-            bannerEnabled = t.BannerEnabled
-        });
+        var result = await _sponsorService.AddSponsorTierAsync(input);
+        return result.ToHttpResult(this, SponsorTierResponse.From);
     }
 
     [HttpPut("tiers/{tierId:int}")]
     [Authorize(Policy = "AdminOnly")]
-    public async Task<ActionResult> UpdateSponsorTier(int tierId, [FromBody] SponsorTierUpdateDto input)
+    public async Task<ActionResult<SponsorTierResponse>> UpdateSponsorTier(int tierId, [FromBody] SponsorTierInput input)
     {
-        var result = await _sponsorService.UpdateSponsorTierAsync(tierId, new SponsorTierUpdateInput(input.Name, input.Priority, input.BannerEnabled));
-        if (!result.IsSuccess)
-        {
-            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
-        }
-
-        var t = result.Value!;
-        return Ok(new
-        {
-            tierId = t.TierId,
-            name = t.Name,
-            priority = t.Priority,
-            bannerEnabled = t.BannerEnabled
-        });
+        var result = await _sponsorService.UpdateSponsorTierAsync(tierId, input);
+        return result.ToHttpResult(this, SponsorTierResponse.From);
     }
 
     [HttpDelete("tiers/{tierId:int}")]
     [Authorize(Policy = "AdminOnly")]
-    public async Task<ActionResult> DeleteSponsorTier(int tierId)
+    public async Task<ActionResult<DeletedResponse>> DeleteSponsorTier(int tierId)
     {
         var result = await _sponsorService.DeleteSponsorTierAsync(tierId);
-        if (!result.IsSuccess)
-        {
-            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
-        }
-
-        return Ok(new { tierId, deleted = true });
+        return result.ToHttpResult(this, _ => DeletedResponse.Of(tierId));
     }
 }

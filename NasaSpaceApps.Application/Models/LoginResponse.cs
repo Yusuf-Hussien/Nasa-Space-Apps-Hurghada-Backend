@@ -1,4 +1,4 @@
-namespace NasaSpaceApps.Application.Services;
+﻿namespace NasaSpaceApps.Application.Models;
 
 public sealed record LoginResponse(
     string AccessToken,

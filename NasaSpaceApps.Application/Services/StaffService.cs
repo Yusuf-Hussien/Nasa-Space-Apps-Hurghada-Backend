@@ -1,4 +1,5 @@
-using NasaSpaceApps.Application.Common;
+﻿using NasaSpaceApps.Application.Common;
+using NasaSpaceApps.Application.Models;
 using NasaSpaceApps.Application.Interfaces;
 using NasaSpaceApps.Domain.Entities;
 
@@ -34,7 +35,7 @@ public sealed class StaffService
 
     public async Task<Result<Staff>> AddStaffAsync(StaffInput input)
     {
-        var validation = ValidateInput(input.FullName, input.Username, input.Email, input.Role, input.MemberType, requirePassword: true);
+        var validation = ValidateInput(input.FullName, input.Username, input.Email, input.Role, input.MemberType);
         if (validation is not null)
         {
             return validation;
@@ -94,7 +95,7 @@ public sealed class StaffService
             return Result<Staff>.Failure("staff.not_found", 404, "Staff member not found.");
         }
 
-        var validation = ValidateInput(input.FullName, input.Username, input.Email, input.Role, input.MemberType, requirePassword: false);
+        var validation = ValidateInput(input.FullName, input.Username, input.Email, input.Role, input.MemberType);
         if (validation is not null)
         {
             return validation;
@@ -118,7 +119,7 @@ public sealed class StaffService
             return Result<Staff>.Failure("staff.email_taken", 409, "Email is already registered.");
         }
 
-        // Password change (optional — only if provided)
+        // Password change (optional, only if provided)
         if (!string.IsNullOrWhiteSpace(input.Password))
         {
             if (input.Password.Length < 6)
@@ -169,45 +170,40 @@ public sealed class StaffService
         return Result<Staff>.Success(staff);
     }
 
-    public async Task<Result<bool>> DeactivateStaffAsync(int staffId)
+    /// <summary>Soft-delete / restore. Inactive accounts can no longer log in.</summary>
+    public async Task<Result<Staff>> SetStatusAsync(int staffId, string status)
     {
         var staff = await _repository.GetStaffByIdAsync(staffId);
         if (staff is null)
         {
-            return Result<bool>.Failure("staff.not_found", 404, "Staff member not found.");
+            return Result<Staff>.Failure("staff.not_found", 404, "Staff member not found.");
         }
 
-        staff.Status = "Inactive";
+        staff.Status = status;
         await _repository.UpdateStaffAsync(staff);
-        return Result<bool>.Success(true);
+        return Result<Staff>.Success(staff);
     }
 
-    public async Task<Result<bool>> DeleteStaffAsync(int staffId)
+    public async Task<Result<Staff>> DeleteStaffAsync(int staffId)
     {
         var staff = await _repository.GetStaffByIdAsync(staffId);
         if (staff is null)
         {
-            return Result<bool>.Failure("staff.not_found", 404, "Staff member not found.");
+            return Result<Staff>.Failure("staff.not_found", 404, "Staff member not found.");
         }
 
         await _repository.DeleteStaffAsync(staff);
-        return Result<bool>.Success(true);
+        return Result<Staff>.Success(staff);
     }
 
     private static Result<Staff>? ValidateInput(
-        string? fullName, string? username, string? email,
-        string? role, string? memberType, bool requirePassword)
+        string? fullName, string? username, string? email, string? role, string? memberType)
     {
         if (string.IsNullOrWhiteSpace(fullName) ||
             string.IsNullOrWhiteSpace(username) ||
             string.IsNullOrWhiteSpace(email))
         {
             return Result<Staff>.Failure("staff.invalid", 400, "FullName, Username and Email are required.");
-        }
-
-        if (requirePassword)
-        {
-            // Password validated by caller
         }
 
         if (string.IsNullOrWhiteSpace(role))

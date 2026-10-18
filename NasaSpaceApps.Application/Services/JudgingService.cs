@@ -1,4 +1,5 @@
-using NasaSpaceApps.Application.Common;
+﻿using NasaSpaceApps.Application.Common;
+using NasaSpaceApps.Application.Models;
 using NasaSpaceApps.Application.Interfaces;
 using NasaSpaceApps.Domain.Entities;
 
@@ -46,7 +47,7 @@ public sealed class JudgingService
 
             if (item.Score < 0m || item.Score > criterion.MaxScore)
             {
-                return Result<List<JudgeScore>>.Failure("score.invalid", 400, $"Score for criterion {criterion.Name} is outside the allowed range (0–{criterion.MaxScore}).");
+                return Result<List<JudgeScore>>.Failure("score.invalid", 400, $"Score for criterion {criterion.Name} is outside the allowed range (0-{criterion.MaxScore}).");
             }
 
             var score = new JudgeScore
@@ -66,10 +67,38 @@ public sealed class JudgingService
         return Result<List<JudgeScore>>.Success(persistedScores);
     }
 
-    public async Task<Result<List<TeamStandingsEntry>>> GetStandingsAsync()
+    /// <summary>
+    /// Single source of truth for the scoreboard. Ranks and ties come from
+    /// <see cref="StandingsCalculator"/>; this only attaches the per-criterion breakdown.
+    /// </summary>
+    public async Task<Result<List<TeamStanding>>> GetStandingsAsync()
     {
-        var standings = await _repository.GetTeamStandingsAsync();
-        return Result<List<TeamStandingsEntry>>.Success(standings);
+        var scores = await _repository.GetAllScoresAsync();
+
+        var teams = await _repository.GetTeamsAsync();
+        var standings = StandingsCalculator.Calculate(scores, teams);
+
+        var breakdown = scores
+            .GroupBy(score => score.TeamId)
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .Select(score => new TeamStandingScore(
+                        score.CriterionId,
+                        score.Criterion?.Name ?? $"Criterion {score.CriterionId}",
+                        score.Score,
+                        score.JudgeId))
+                    .ToList());
+
+        foreach (var row in standings)
+        {
+            if (breakdown.TryGetValue(row.TeamId, out var perCriterion))
+            {
+                row.Scores = perCriterion;
+            }
+        }
+
+        return Result<List<TeamStanding>>.Success(standings);
     }
 
     public async Task<Result<List<JudgeScore>>> GetScoresForTeamAsync(int teamId)

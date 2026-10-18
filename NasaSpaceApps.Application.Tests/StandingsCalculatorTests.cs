@@ -32,4 +32,37 @@ public class StandingsCalculatorTests
         Assert.True(standings[0].IsTied);
         Assert.True(standings[1].IsTied);
     }
+
+    [Fact]
+    public void Calculate_Should_IncludeUnscoredTeams_WithNoRank()
+    {
+        var standings = StandingsCalculator.Calculate(
+            new List<JudgeScore> { new() { TeamId = 1, Score = 10m } },
+            new[]
+            {
+                new Team { TeamId = 1, Name = "Scored" },
+                new Team { TeamId = 2, Name = "Unscored" }
+            });
+
+        Assert.Equal(2, standings.Count);
+
+        var scored = standings.Single(row => row.TeamId == 1);
+        Assert.Equal(1, scored.Rank);
+        Assert.Equal(10m, scored.TotalScore);
+
+        var unscored = standings.Single(row => row.TeamId == 2);
+        Assert.Null(unscored.Rank);
+        Assert.False(unscored.IsTied);
+        Assert.Equal(0m, unscored.TotalScore);
+    }
+
+    [Fact]
+    public void Calculate_Should_ReturnNoRows_WhenThereAreNoTeams()
+    {
+        var standings = StandingsCalculator.Calculate(
+            new List<JudgeScore>(),
+            new List<Team>());
+
+        Assert.Empty(standings);
+    }
 }

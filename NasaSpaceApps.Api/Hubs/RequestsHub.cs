@@ -1,36 +1,33 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
-using NasaSpaceApps.Domain.Entities;
+using NasaSpaceApps.Api.Common;
 
 namespace NasaSpaceApps.Api.Hubs;
 
+/// <summary>Staff-only hub for the request queue. Organizers subscribe to
+/// <see cref="OrganizerGroup"/> to receive request create/update/delete events.</summary>
 [Authorize]
 public class RequestsHub : Hub
 {
     public const string Url = "/hubs/requests";
+    public const string OrganizerGroup = "Organizers";
+
+    public const string EventRequestCreated = "RequestCreated";
+    public const string EventRequestUpdated = "RequestUpdated";
+    public const string EventRequestDeleted = "RequestDeleted";
 
     public async Task JoinOrganizerGroup()
     {
-        if (Context.User?.Identity?.IsAuthenticated != true)
-        {
-            return;
-        }
-
-        var isStaff = Context.User.IsInRole(AppRoles.Admin) ||
-                      Context.User.IsInRole(AppRoles.CoreTeam) ||
-                      Context.User.IsInRole(AppRoles.Judge);
-
-        if (!isStaff)
+        if (!Context.User.IsStaff())
         {
             throw new HubException("Only staff can join the organizer group.");
         }
 
-        await Groups.AddToGroupAsync(Context.ConnectionId, "Organizers");
+        await Groups.AddToGroupAsync(Context.ConnectionId, OrganizerGroup);
     }
 
     public async Task LeaveOrganizerGroup()
     {
-        await Groups.RemoveFromGroupAsync(Context.ConnectionId, "Organizers");
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, OrganizerGroup);
     }
 }
-

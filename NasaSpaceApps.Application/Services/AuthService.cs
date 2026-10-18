@@ -1,4 +1,5 @@
-using NasaSpaceApps.Application.Common;
+﻿using NasaSpaceApps.Application.Common;
+using NasaSpaceApps.Application.Models;
 using NasaSpaceApps.Application.Interfaces;
 using NasaSpaceApps.Domain.Entities;
 
@@ -21,7 +22,7 @@ public sealed class AuthService
     /// Unified login. Staff provide { identifier } (email or username) + password.
     /// Participants provide { teamId } + password.
     /// </summary>
-    public async Task<Result<LoginResponse>> LoginUnifiedAsync(string? identifier, int? teamId, string password)
+    public async Task<Result<LoginResponse>> LoginUnifiedAsync(string? identifier, int? teamId, string password, bool rememberMe = false)
     {
         var hasIdentifier = !string.IsNullOrWhiteSpace(identifier);
         var hasTeamId = teamId.HasValue && teamId.Value > 0;
@@ -41,11 +42,11 @@ public sealed class AuthService
         }
 
         return hasTeamId
-            ? await LoginParticipantAsync(teamId!.Value, password)
-            : await LoginStaffAsync(identifier!.Trim(), password);
+            ? await LoginParticipantAsync(teamId!.Value, password, rememberMe)
+            : await LoginStaffAsync(identifier!.Trim(), password, rememberMe);
     }
 
-    private async Task<Result<LoginResponse>> LoginParticipantAsync(int teamId, string password)
+    private async Task<Result<LoginResponse>> LoginParticipantAsync(int teamId, string password, bool rememberMe)
     {
         var team = await _repository.GetTeamByIdAsync(teamId);
 
@@ -59,7 +60,7 @@ public sealed class AuthService
             return Result<LoginResponse>.Failure("auth.invalid_credentials", 401, "Invalid teamId or password.");
         }
 
-        var token = _tokenService.CreateParticipantToken(team);
+        var token = _tokenService.CreateParticipantToken(team, rememberMe);
         var response = new LoginResponse(
             AccessToken: token,
             Role: AppRoles.Participant,
@@ -70,7 +71,7 @@ public sealed class AuthService
         return Result<LoginResponse>.Success(response);
     }
 
-    private async Task<Result<LoginResponse>> LoginStaffAsync(string identifier, string password)
+    private async Task<Result<LoginResponse>> LoginStaffAsync(string identifier, string password, bool rememberMe)
     {
         var staff = await _repository.GetStaffByIdentifierAsync(identifier);
 
@@ -84,7 +85,7 @@ public sealed class AuthService
             return Result<LoginResponse>.Failure("auth.invalid_credentials", 401, "Invalid email/username or password.");
         }
 
-        var token = _tokenService.CreateStaffToken(staff);
+        var token = _tokenService.CreateStaffToken(staff, rememberMe);
         var response = new LoginResponse(
             AccessToken: token,
             Role: staff.Role,

@@ -1,5 +1,6 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NasaSpaceApps.Api.Common;
 using NasaSpaceApps.Application.Services;
 
 namespace NasaSpaceApps.Api.Controllers;
@@ -16,62 +17,28 @@ public class TeamsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult> GetTeams([FromQuery] string? search = null)
+    public async Task<ActionResult<List<TeamSummaryResponse>>> GetTeams([FromQuery] string? search = null)
     {
         var result = await _teamService.SearchTeamsAsync(search);
-        if (!result.IsSuccess)
-        {
-            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
-        }
-
-        // Hide username from non-staff callers
-        var isStaff = User.IsInRole("Admin") || User.IsInRole("CoreTeam") || User.IsInRole("Judge");
-
-        return Ok(result.Value!.Select(team => new
-        {
-            teamId = team.TeamId,
-            name = team.Name,
-            username = isStaff ? team.Username : null,
-            status = team.Status
-        }));
+        return result.ToHttpResult(
+            this,
+            teams => teams.Select(t => TeamSummaryResponse.From(t, User.IsStaff())).ToList());
     }
 
     [Authorize(Policy = "StaffOnly")]
     [HttpGet("{teamId:int}")]
-    public async Task<ActionResult> GetTeam(int teamId)
+    public async Task<ActionResult<TeamDetailResponse>> GetTeam(int teamId)
     {
         var result = await _teamService.GetTeamAsync(teamId);
-        if (!result.IsSuccess)
-        {
-            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
-        }
-
-        return Ok(new
-        {
-            teamId = result.Value!.TeamId,
-            name = result.Value.Name,
-            username = result.Value.Username,
-            status = result.Value.Status,
-            challengeId = result.Value.ChallengeId
-        });
+        return result.ToHttpResult(this, TeamDetailResponse.From);
     }
 
+    /// <summary>Team roster. Staff-only: contains student names and contact details.</summary>
+    [Authorize(Policy = "StaffOnly")]
     [HttpGet("{teamId:int}/students")]
-    public async Task<ActionResult> GetStudents(int teamId)
+    public async Task<ActionResult<List<StudentResponse>>> GetStudents(int teamId)
     {
         var result = await _teamService.GetStudentsAsync(teamId);
-        if (!result.IsSuccess)
-        {
-            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
-        }
-
-        return Ok(result.Value!.Select(student => new
-        {
-            studentId = student.StudentId,
-            name = student.Name,
-            email = student.Email,
-            contact = student.Contact,
-            status = student.Status
-        }));
+        return result.ToHttpResult(this, students => students.Select(StudentResponse.From).ToList());
     }
 }

@@ -1,6 +1,8 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NasaSpaceApps.Api.Common;
 using NasaSpaceApps.Application.Common;
+using NasaSpaceApps.Application.Models;
 using NasaSpaceApps.Application.Services;
 
 namespace NasaSpaceApps.Api.Controllers;
@@ -23,92 +25,36 @@ public class AuthController : ControllerBase
     /// Participant: { teamId } + password.
     /// </summary>
     [HttpPost("login")]
-    public async Task<ActionResult> Login([FromBody] LoginRequest request)
+    public async Task<ActionResult<LoginResponse>> Login([FromBody] LoginRequest request)
     {
-        var result = await _authService.LoginUnifiedAsync(request.Identifier, request.TeamId, request.Password);
-        if (!result.IsSuccess)
-        {
-            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
-        }
-
-        var value = result.Value!;
-        return Ok(new
-        {
-            accessToken = value.AccessToken,
-            role = value.Role,
-            name = value.Name,
-            teamId = value.TeamId,
-            username = value.Username,
-            email = value.Email,
-            staffId = value.StaffId,
-            judgeId = value.JudgeId
-        });
+        var result = await _authService.LoginUnifiedAsync(
+            request.Identifier, request.TeamId, request.Password, request.RememberMe);
+        return result.ToHttpResult(this);
     }
 
-    /// <summary>Back-compat alias: username+password → always treated as staff identifier.</summary>
+    /// <summary>Staff login. Same contract as <see cref="Login"/> with identifier+password.</summary>
     [HttpPost("login/staff")]
-    public async Task<ActionResult> LoginStaff([FromBody] StaffLoginRequest request)
+    public async Task<ActionResult<LoginResponse>> LoginStaff([FromBody] LoginRequest request)
     {
-        var result = await _authService.LoginUnifiedAsync(request.Identifier, null, request.Password);
-        if (!result.IsSuccess)
-        {
-            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
-        }
-
-        var value = result.Value!;
-        return Ok(new
-        {
-            accessToken = value.AccessToken,
-            role = value.Role,
-            name = value.Name,
-            username = value.Username,
-            email = value.Email,
-            staffId = value.StaffId,
-            judgeId = value.JudgeId
-        });
+        var result = await _authService.LoginUnifiedAsync(
+            request.Identifier, null, request.Password, request.RememberMe);
+        return result.ToHttpResult(this);
     }
 
-    /// <summary>Back-compat alias: teamId+password → participant.</summary>
+    /// <summary>Participant login. Same contract as <see cref="Login"/> with teamId+password.</summary>
     [HttpPost("login/participant")]
-    public async Task<ActionResult> LoginParticipant([FromBody] ParticipantLoginRequest request)
+    public async Task<ActionResult<LoginResponse>> LoginParticipant([FromBody] LoginRequest request)
     {
-        var result = await _authService.LoginUnifiedAsync(null, request.TeamId, request.Password);
-        if (!result.IsSuccess)
-        {
-            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
-        }
-
-        var value = result.Value!;
-        return Ok(new
-        {
-            accessToken = value.AccessToken,
-            role = value.Role,
-            name = value.Name,
-            teamId = value.TeamId,
-            username = value.Username
-        });
+        var result = await _authService.LoginUnifiedAsync(
+            null, request.TeamId, request.Password, request.RememberMe);
+        return result.ToHttpResult(this);
     }
 
     [Authorize]
     [HttpGet("me")]
-    public async Task<ActionResult> Me()
+    public async Task<ActionResult<LoginResponse>> Me()
     {
         var result = await _authService.GetCurrentUserAsync(_currentUser);
-        if (!result.IsSuccess)
-        {
-            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
-        }
-
-        var value = result.Value!;
-        return Ok(new
-        {
-            role = value.Role,
-            name = value.Name,
-            teamId = value.TeamId,
-            username = value.Username,
-            email = value.Email,
-            staffId = value.StaffId,
-            judgeId = value.JudgeId
-        });
+        return result.ToHttpResult(this);
     }
 }

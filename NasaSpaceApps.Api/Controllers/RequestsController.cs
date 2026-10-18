@@ -1,6 +1,7 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using NasaSpaceApps.Api.Common;
 using NasaSpaceApps.Api.Hubs;
 using NasaSpaceApps.Application.Common;
 using NasaSpaceApps.Application.Services;
@@ -17,7 +18,10 @@ public class RequestsController : ControllerBase
     private readonly ICurrentUser _currentUser;
     private readonly IHubContext<RequestsHub> _hubContext;
 
-    public RequestsController(RequestService requestService, ICurrentUser currentUser, IHubContext<RequestsHub> hubContext)
+    public RequestsController(
+        RequestService requestService,
+        ICurrentUser currentUser,
+        IHubContext<RequestsHub> hubContext)
     {
         _requestService = requestService;
         _currentUser = currentUser;
@@ -25,7 +29,10 @@ public class RequestsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult> GetRequests([FromQuery] int? teamId = null, [FromQuery] string? type = null, [FromQuery] string? status = null)
+    public async Task<ActionResult<List<ServiceRequestResponse>>> GetRequests(
+        [FromQuery] int? teamId = null,
+        [FromQuery] string? type = null,
+        [FromQuery] string? status = null)
     {
         // Participants may only view their own team's requests
         if (_currentUser.Role == AppRoles.Participant && _currentUser.TeamId.HasValue)
@@ -34,21 +41,7 @@ public class RequestsController : ControllerBase
         }
 
         var result = await _requestService.GetRequestsAsync(teamId, type, status);
-        if (!result.IsSuccess)
-        {
-            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
-        }
-
-        return Ok(result.Value!.Select(request => new
-        {
-            requestId = request.RequestId,
-            teamId = request.TeamId,
-            type = request.Type,
-            status = request.Status,
-            message = request.Message,
-            createdAt = request.CreatedAt,
-            resolvedAt = request.ResolvedAt
-        }));
+        return result.ToHttpResult(this, requests => requests.Select(ServiceRequestResponse.From).ToList());
     }
 
     /// <summary>
@@ -56,7 +49,7 @@ public class RequestsController : ControllerBase
     /// from the token; staff may specify a teamId on behalf of a team.
     /// </summary>
     [HttpPost]
-    public async Task<ActionResult> CreateRequest([FromBody] CreateRequestRequest request)
+    public async Task<ActionResult<ServiceRequestResponse>> CreateRequest([FromBody] CreateRequestRequest request)
     {
         var teamId = request.TeamId;
         if (_currentUser.Role == AppRoles.Participant && _currentUser.TeamId.HasValue)
@@ -65,62 +58,51 @@ public class RequestsController : ControllerBase
         }
         else if (!_currentUser.IsStaff)
         {
-            return StatusCode(403, new { code = "request.forbidden", message = "Not allowed to create requests." });
+            return StatusCode(403, new { error = new { code = "request.forbidden", message = "Not allowed to create requests." } });
         }
 
         var result = await _requestService.CreateRequestAsync(teamId, request.Type, request.Message);
-        if (!result.IsSuccess)
+
+        var response = result.IsSuccess ? ServiceRequestResponse.From(result.Value!) : null;
+        if (response is not null)
         {
-            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
+            await BroadcastAsync(RequestsHub.EventRequestCreated, response);
         }
 
-        var dto = new
-        {
-            requestId = result.Value!.RequestId,
-            teamId = result.Value.TeamId,
-            type = result.Value.Type,
-            status = result.Value.Status,
-            createdAt = result.Value.CreatedAt,
-            message = result.Value.Message
-        };
-        await _hubContext.Clients.Group("Organizers").SendAsync("RequestCreated", dto);
-        return Ok(dto);
+        return result.ToHttpResult(this, _ => response!);
     }
 
     [Authorize(Policy = "StaffOnly")]
     [HttpPatch("{requestId:int}")]
-    public async Task<ActionResult> ResolveRequest(int requestId, [FromBody] ResolveRequestRequest request)
+    public async Task<ActionResult<ServiceRequestResponse>> ResolveRequest(
+        int requestId,
+        [FromBody] ResolveRequestRequest request)
     {
         var result = await _requestService.ResolveRequestAsync(requestId, request.Status);
-        if (!result.IsSuccess)
+
+        var response = result.IsSuccess ? ServiceRequestResponse.From(result.Value!) : null;
+        if (response is not null)
         {
-            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
+            await BroadcastAsync(RequestsHub.EventRequestUpdated, response);
         }
 
-        var dto = new
-        {
-            requestId = result.Value!.RequestId,
-            teamId = result.Value.TeamId,
-            type = result.Value.Type,
-            status = result.Value.Status,
-            message = result.Value.Message,
-            createdAt = result.Value.CreatedAt,
-            resolvedAt = result.Value.ResolvedAt
-        };
-        await _hubContext.Clients.Group("Organizers").SendAsync("RequestUpdated", dto);
-        return Ok(dto);
+        return result.ToHttpResult(this, _ => response!);
     }
 
     [HttpDelete("{requestId:int}")]
-    public async Task<ActionResult> DeleteRequest(int requestId)
+    public async Task<ActionResult<DeletedResponse>> DeleteRequest(int requestId)
     {
         var teamId = _currentUser.IsStaff ? (int?)null : _currentUser.TeamId;
         var result = await _requestService.DeleteRequestAsync(requestId, teamId, _currentUser.IsStaff);
-        if (!result.IsSuccess)
+
+        if (result.IsSuccess)
         {
-            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
+            await BroadcastAsync(RequestsHub.EventRequestDeleted, requestId);
         }
-        await _hubContext.Clients.Group("Organizers").SendAsync("RequestDeleted", requestId);
-        return Ok(new { requestId, deleted = true });
+
+        return result.ToHttpResult(this, _ => DeletedResponse.Of(requestId));
     }
+
+    private Task BroadcastAsync(string eventName, object payload) =>
+        _hubContext.Clients.Group(RequestsHub.OrganizerGroup).SendAsync(eventName, payload);
 }

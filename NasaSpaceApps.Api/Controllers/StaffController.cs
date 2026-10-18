@@ -1,6 +1,8 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NasaSpaceApps.Api.Common;
 using NasaSpaceApps.Application.Common;
+using NasaSpaceApps.Application.Models;
 using NasaSpaceApps.Application.Services;
 using NasaSpaceApps.Domain.Entities;
 
@@ -20,31 +22,21 @@ public class StaffController : ControllerBase
 
     /// <summary>List staff. Filter by role and/or memberType.</summary>
     [HttpGet]
-    public async Task<ActionResult> GetStaffs(
+    public async Task<ActionResult<List<StaffResponse>>> GetStaffs(
         [FromQuery] string? role = null,
         [FromQuery] string? memberType = null,
         [FromQuery] string? search = null)
     {
         var result = await _staffService.GetStaffsAsync(role, memberType, search);
-        if (!result.IsSuccess)
-        {
-            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
-        }
-
-        return Ok(result.Value!.Select(ToDto));
+        return result.ToHttpResult(this, staff => staff.Select(StaffResponse.From).ToList());
     }
 
     /// <summary>Get a single staff member by id.</summary>
     [HttpGet("{staffId:int}")]
-    public async Task<ActionResult> GetStaff(int staffId)
+    public async Task<ActionResult<StaffResponse>> GetStaff(int staffId)
     {
         var result = await _staffService.GetStaffByIdAsync(staffId);
-        if (!result.IsSuccess)
-        {
-            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
-        }
-
-        return Ok(ToDto(result.Value!));
+        return result.ToHttpResult(this, StaffResponse.From);
     }
 
     /// <summary>
@@ -53,99 +45,48 @@ public class StaffController : ControllerBase
     /// Judges auto-get a linked Judge profile for score attribution.
     /// </summary>
     [HttpPost]
-    public async Task<ActionResult> AddStaff([FromBody] StaffInputDto input)
+    public async Task<ActionResult<StaffResponse>> AddStaff([FromBody] StaffInput input)
     {
-        var result = await _staffService.AddStaffAsync(new StaffInput(
-            input.FullName, input.Username, input.Email, input.Password, input.Role, input.MemberType));
-
-        if (!result.IsSuccess)
-        {
-            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
-        }
-
-        return Ok(ToDto(result.Value!));
+        var result = await _staffService.AddStaffAsync(input);
+        return result.ToHttpResult(this, StaffResponse.From);
     }
 
     /// <summary>Update a staff member. Password is optional (only set to change it).</summary>
     [HttpPut("{staffId:int}")]
-    public async Task<ActionResult> UpdateStaff(int staffId, [FromBody] StaffUpdateDto input)
+    public async Task<ActionResult<StaffResponse>> UpdateStaff(int staffId, [FromBody] StaffUpdateInput input)
     {
-        var result = await _staffService.UpdateStaffAsync(staffId, new StaffUpdateInput(
-            input.FullName, input.Username, input.Email, input.Password, input.Role, input.MemberType, input.Status));
-
-        if (!result.IsSuccess)
-        {
-            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
-        }
-
-        return Ok(ToDto(result.Value!));
+        var result = await _staffService.UpdateStaffAsync(staffId, input);
+        return result.ToHttpResult(this, StaffResponse.From);
     }
 
     /// <summary>Deactivate (soft-delete) a staff member. They can no longer log in.</summary>
     [HttpPatch("{staffId:int}/deactivate")]
-    public async Task<ActionResult> DeactivateStaff(int staffId)
+    public async Task<ActionResult<StaffResponse>> DeactivateStaff(int staffId)
     {
-        var result = await _staffService.DeactivateStaffAsync(staffId);
-        if (!result.IsSuccess)
-        {
-            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
-        }
-
-        return Ok(new { staffId, status = "Inactive" });
+        var result = await _staffService.SetStatusAsync(staffId, "Inactive");
+        return result.ToHttpResult(this, StaffResponse.From);
     }
 
     /// <summary>Reactivate a staff member.</summary>
     [HttpPatch("{staffId:int}/activate")]
-    public async Task<ActionResult> ActivateStaff(int staffId)
+    public async Task<ActionResult<StaffResponse>> ActivateStaff(int staffId)
     {
-        var update = await _staffService.GetStaffByIdAsync(staffId);
-        if (!update.IsSuccess)
-        {
-            return StatusCode(update.Error!.HttpStatus, new { code = update.Error.Code, message = update.Error.Message });
-        }
-
-        var s = update.Value!;
-        var result = await _staffService.UpdateStaffAsync(staffId, new StaffUpdateInput(
-            s.FullName, s.Username, s.Email, null, s.Role, s.MemberType, "Active"));
-
-        if (!result.IsSuccess)
-        {
-            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
-        }
-
-        return Ok(ToDto(result.Value!));
+        var result = await _staffService.SetStatusAsync(staffId, "Active");
+        return result.ToHttpResult(this, StaffResponse.From);
     }
 
     /// <summary>Permanently delete a staff member.</summary>
     [HttpDelete("{staffId:int}")]
-    public async Task<ActionResult> DeleteStaff(int staffId)
+    public async Task<ActionResult<DeletedResponse>> DeleteStaff(int staffId)
     {
         var result = await _staffService.DeleteStaffAsync(staffId);
-        if (!result.IsSuccess)
-        {
-            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
-        }
-
-        return Ok(new { staffId, deleted = true });
+        return result.ToHttpResult(this, _ => DeletedResponse.Of(staffId));
     }
 
     /// <summary>List available core-team member types (for the frontend dropdown).</summary>
     [HttpGet("member-types")]
-    public ActionResult GetMemberTypes()
+    public ActionResult<IReadOnlyList<string>> GetMemberTypes()
     {
         return Ok(CoreTeamTypes.All);
     }
-
-    private static object ToDto(Staff s) => new
-    {
-        staffId = s.StaffId,
-        fullName = s.FullName,
-        username = s.Username,
-        email = s.Email,
-        role = s.Role,
-        memberType = s.MemberType,
-        status = s.Status,
-        judgeId = s.JudgeId,
-        createdAt = s.CreatedAt
-    };
 }

@@ -1,5 +1,6 @@
-namespace NasaSpaceApps.Application.Services;
+namespace NasaSpaceApps.Application.Models;
 
+/// <summary>Shared create/update payload for a sponsor.</summary>
 public sealed record SponsorInput(
     string Name,
     string? Logo,

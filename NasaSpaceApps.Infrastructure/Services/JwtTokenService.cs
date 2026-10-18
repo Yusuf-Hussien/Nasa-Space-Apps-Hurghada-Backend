@@ -1,7 +1,6 @@
-using System.IdentityModel.Tokens.Jwt;
+﻿using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using NasaSpaceApps.Application.Interfaces;
 using NasaSpaceApps.Domain.Entities;
@@ -10,14 +9,14 @@ namespace NasaSpaceApps.Infrastructure.Services;
 
 public sealed class JwtTokenService : ITokenService
 {
-    private readonly IConfiguration _configuration;
+    private readonly JwtOptions _options;
 
-    public JwtTokenService(IConfiguration configuration)
+    public JwtTokenService(JwtOptions options)
     {
-        _configuration = configuration;
+        _options = options;
     }
 
-    public string CreateParticipantToken(Team team)
+    public string CreateParticipantToken(Team team, bool rememberMe = false)
     {
         var claims = new[]
         {
@@ -29,10 +28,10 @@ public sealed class JwtTokenService : ITokenService
             new Claim("name", team.Name)
         };
 
-        return BuildToken(claims);
+        return BuildToken(claims, rememberMe);
     }
 
-    public string CreateStaffToken(Staff staff)
+    public string CreateStaffToken(Staff staff, bool rememberMe = false)
     {
         var claims = new List<Claim>
         {
@@ -50,26 +49,22 @@ public sealed class JwtTokenService : ITokenService
             claims.Add(new Claim("judgeId", staff.JudgeId.Value.ToString()));
         }
 
-        return BuildToken(claims);
+        return BuildToken(claims, rememberMe);
     }
 
-    private string BuildToken(IEnumerable<Claim> claims)
+    private string BuildToken(IEnumerable<Claim> claims, bool rememberMe)
     {
-        var keyValue = _configuration["Jwt:Key"] ?? "ThisIsADevelopmentJwtSigningKey1234567890";
-        var key = Encoding.UTF8.GetBytes(keyValue);
-        var credentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256);
+        var credentials = new SigningCredentials(
+            new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_options.Key)),
+            SecurityAlgorithms.HmacSha256);
 
-        var expiryMinutes = 720; // default 12 hours — event-long hackathon session
-        if (int.TryParse(_configuration["Jwt:ExpiryMinutes"], out var configured) && configured > 0)
-        {
-            expiryMinutes = configured;
-        }
+        var lifetimeMinutes = rememberMe ? _options.RememberMeExpiryMinutes : _options.ExpiryMinutes;
 
         var token = new JwtSecurityToken(
-            issuer: _configuration["Jwt:Issuer"] ?? "NasaSpaceApps",
-            audience: _configuration["Jwt:Audience"] ?? "NasaSpaceApps.Client",
+            issuer: _options.Issuer,
+            audience: _options.Audience,
             claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(expiryMinutes),
+            expires: DateTime.UtcNow.AddMinutes(lifetimeMinutes),
             signingCredentials: credentials);
 
         return new JwtSecurityTokenHandler().WriteToken(token);

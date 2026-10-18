@@ -1,6 +1,8 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NasaSpaceApps.Api.Common;
 using NasaSpaceApps.Application.Common;
+using NasaSpaceApps.Application.Models;
 using NasaSpaceApps.Application.Services;
 
 namespace NasaSpaceApps.Api.Controllers;
@@ -24,138 +26,59 @@ public class QuestionsController : ControllerBase
     /// Participants see only published questions without correct answers.
     /// </summary>
     [HttpGet]
-    public async Task<ActionResult> GetQuestions([FromQuery] int? challengeId = null)
+    public async Task<ActionResult<List<QuestionResponse>>> GetQuestions([FromQuery] int? challengeId = null)
     {
         var result = await _questionService.GetVisibleQuestionsAsync(challengeId, _currentUser);
-        if (!result.IsSuccess)
-        {
-            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
-        }
-
         var showAnswers = _currentUser.IsStaff;
-
-        return Ok(result.Value!.Select(q => new
-        {
-            questionId = q.QuestionId,
-            challengeId = q.ChallengeId,
-            type = q.Type,
-            text = q.Text,
-            options = q.Options,
-            correctAnswer = showAnswers ? q.CorrectAnswer : null,
-            isPublished = q.IsPublished,
-            publishedAt = q.PublishedAt,
-            points = q.Points,
-            isActive = q.IsActive
-        }));
+        return result.ToHttpResult(
+            this,
+            questions => questions.Select(q => QuestionResponse.From(q, showAnswers)).ToList());
     }
 
     [HttpGet("{id:int}")]
-    public async Task<ActionResult> GetQuestion(int id)
+    public async Task<ActionResult<QuestionResponse>> GetQuestion(int id)
     {
         var result = await _questionService.GetQuestionByIdAsync(id, _currentUser);
-        if (!result.IsSuccess)
-        {
-            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
-        }
-
-        var q = result.Value!;
-        var showAnswers = _currentUser.IsStaff;
-
-        return Ok(new
-        {
-            questionId = q.QuestionId,
-            challengeId = q.ChallengeId,
-            type = q.Type,
-            text = q.Text,
-            options = q.Options,
-            correctAnswer = showAnswers ? q.CorrectAnswer : null,
-            isPublished = q.IsPublished,
-            publishedAt = q.PublishedAt,
-            points = q.Points,
-            isActive = q.IsActive
-        });
+        return result.ToHttpResult(this, q => QuestionResponse.From(q, _currentUser.IsStaff));
     }
 
     [Authorize(Policy = "AdminOnly")]
     [HttpPost]
-    public async Task<ActionResult> CreateQuestion([FromBody] QuestionInputDto input)
+    public async Task<ActionResult<QuestionResponse>> CreateQuestion([FromBody] QuestionInput input)
     {
-        var result = await _questionService.CreateAsync(new QuestionInput(
-            input.ChallengeId, input.Type, input.Text, input.Options, input.CorrectAnswer, input.Points));
-
-        if (!result.IsSuccess)
-        {
-            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
-        }
-
-        return Ok(ToDto(result.Value!, includeAnswer: true));
+        var result = await _questionService.CreateAsync(input);
+        return result.ToHttpResult(this, q => QuestionResponse.From(q, includeAnswer: true));
     }
 
     [Authorize(Policy = "AdminOnly")]
     [HttpPut("{id:int}")]
-    public async Task<ActionResult> UpdateQuestion(int id, [FromBody] QuestionInputDto input)
+    public async Task<ActionResult<QuestionResponse>> UpdateQuestion(int id, [FromBody] QuestionInput input)
     {
-        var result = await _questionService.UpdateAsync(id, new QuestionInput(
-            input.ChallengeId, input.Type, input.Text, input.Options, input.CorrectAnswer, input.Points));
-
-        if (!result.IsSuccess)
-        {
-            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
-        }
-
-        return Ok(ToDto(result.Value!, includeAnswer: true));
+        var result = await _questionService.UpdateAsync(id, input);
+        return result.ToHttpResult(this, q => QuestionResponse.From(q, includeAnswer: true));
     }
 
     [Authorize(Policy = "AdminOnly")]
     [HttpPost("{id:int}/publish")]
-    public async Task<ActionResult> PublishQuestion(int id)
+    public async Task<ActionResult<QuestionResponse>> PublishQuestion(int id)
     {
         var result = await _questionService.PublishAsync(id, publish: true);
-        if (!result.IsSuccess)
-        {
-            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
-        }
-
-        return Ok(ToDto(result.Value!, includeAnswer: true));
+        return result.ToHttpResult(this, q => QuestionResponse.From(q, includeAnswer: true));
     }
 
     [Authorize(Policy = "AdminOnly")]
     [HttpPost("{id:int}/unpublish")]
-    public async Task<ActionResult> UnpublishQuestion(int id)
+    public async Task<ActionResult<QuestionResponse>> UnpublishQuestion(int id)
     {
         var result = await _questionService.PublishAsync(id, publish: false);
-        if (!result.IsSuccess)
-        {
-            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
-        }
-
-        return Ok(ToDto(result.Value!, includeAnswer: true));
+        return result.ToHttpResult(this, q => QuestionResponse.From(q, includeAnswer: true));
     }
 
     [Authorize(Policy = "AdminOnly")]
     [HttpDelete("{id:int}")]
-    public async Task<ActionResult> DeleteQuestion(int id)
+    public async Task<ActionResult<DeletedResponse>> DeleteQuestion(int id)
     {
         var result = await _questionService.SoftDeleteAsync(id);
-        if (!result.IsSuccess)
-        {
-            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
-        }
-
-        return Ok(new { questionId = result.Value!.QuestionId, isActive = false });
+        return result.ToHttpResult(this, _ => DeletedResponse.Of(id));
     }
-
-    private static object ToDto(Domain.Entities.Question q, bool includeAnswer) => new
-    {
-        questionId = q.QuestionId,
-        challengeId = q.ChallengeId,
-        type = q.Type,
-        text = q.Text,
-        options = q.Options,
-        correctAnswer = includeAnswer ? q.CorrectAnswer : null,
-        isPublished = q.IsPublished,
-        publishedAt = q.PublishedAt,
-        points = q.Points,
-        isActive = q.IsActive
-    };
 }
