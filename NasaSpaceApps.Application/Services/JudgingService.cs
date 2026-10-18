@@ -66,6 +66,12 @@ public sealed class JudgingService
         return Result<List<JudgeScore>>.Success(persistedScores);
     }
 
+    public async Task<Result<List<TeamStandingsEntry>>> GetStandingsAsync()
+    {
+        var standings = await _repository.GetTeamStandingsAsync();
+        return Result<List<TeamStandingsEntry>>.Success(standings);
+    }
+
     public async Task<Result<List<JudgeScore>>> GetScoresForTeamAsync(int teamId)
     {
         var scores = await _repository.GetScoresForTeamAsync(teamId);

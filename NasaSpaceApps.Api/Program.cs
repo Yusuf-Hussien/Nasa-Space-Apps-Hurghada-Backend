@@ -26,6 +26,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddFluentValidationAutoValidation();
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddSignalR();
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 builder.Services.AddDbContext<NasaSpaceAppsDbContext>(options =>
@@ -120,5 +121,7 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapHub<NasaSpaceApps.Api.Hubs.RequestsHub>(NasaSpaceApps.Api.Hubs.RequestsHub.Url);
+app.MapHub<NasaSpaceApps.Api.Hubs.JudgingHub>(NasaSpaceApps.Api.Hubs.JudgingHub.Url);
 
 app.Run();

@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
+using NasaSpaceApps.Api.Hubs;
 using NasaSpaceApps.Application.Common;
 using NasaSpaceApps.Application.Services;
 
@@ -12,11 +14,13 @@ public class JudgingController : ControllerBase
 {
     private readonly JudgingService _judgingService;
     private readonly ICurrentUser _currentUser;
+    private readonly IHubContext<JudgingHub> _hubContext;
 
-    public JudgingController(JudgingService judgingService, ICurrentUser currentUser)
+    public JudgingController(JudgingService judgingService, ICurrentUser currentUser, IHubContext<JudgingHub> hubContext)
     {
         _judgingService = judgingService;
         _currentUser = currentUser;
+        _hubContext = hubContext;
     }
 
     [HttpGet("criteria")]
@@ -38,9 +42,35 @@ public class JudgingController : ControllerBase
         }));
     }
 
+    [AllowAnonymous]
+    [HttpGet("standings")]
+    public async Task<ActionResult> GetStandings()
+    {
+        var result = await _judgingService.GetStandingsAsync();
+        if (!result.IsSuccess)
+        {
+            return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
+        }
+
+        return Ok(result.Value!.Select((entry, index) => new
+        {
+            rank = index + 1,
+            teamId = entry.TeamId,
+            teamName = entry.TeamName,
+            totalScore = entry.TotalScore,
+            scores = entry.Scores.Select(score => new
+            {
+                criterionId = score.CriterionId,
+                criterionName = score.CriterionName,
+                score = score.Score,
+                judgeId = score.JudgeId
+            })
+        }));
+    }
+
     /// <summary>
     /// Submit scores. The judgeId is taken from the authenticated judge's token —
-    /// it is NOT accepted from the request body.
+    /// it is NOT accepted from the request body. Broadcasts the updated standings to everyone via SignalR.
     /// </summary>
     [Authorize(Policy = "JudgeOnly")]
     [HttpPost("scores")]
@@ -59,14 +89,37 @@ public class JudgingController : ControllerBase
             return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
         }
 
-        return Ok(result.Value!.Select(score => new
+        var submitted = result.Value!.Select(score => new
         {
             scoreId = score.ScoreId,
             teamId = score.TeamId,
             criterionId = score.CriterionId,
             score = score.Score,
             comment = score.Comment
-        }));
+        }).ToList();
+        await _hubContext.Clients.All.SendAsync("ScoresSubmitted", new { teamId = request.TeamId, judgeId, scores = submitted });
+
+        var standingsResult = await _judgingService.GetStandingsAsync();
+        if (standingsResult.IsSuccess)
+        {
+            var standings = standingsResult.Value!.Select((entry, index) => new
+            {
+                rank = index + 1,
+                teamId = entry.TeamId,
+                teamName = entry.TeamName,
+                totalScore = entry.TotalScore,
+                scores = entry.Scores.Select(score => new
+                {
+                    criterionId = score.CriterionId,
+                    criterionName = score.CriterionName,
+                    score = score.Score,
+                    judgeId = score.JudgeId
+                })
+            });
+            await _hubContext.Clients.All.SendAsync("StandingsUpdated", standings);
+        }
+
+        return Ok(submitted);
     }
 
     [Authorize(Policy = "StaffOnly")]

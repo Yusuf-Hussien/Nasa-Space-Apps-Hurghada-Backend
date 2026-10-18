@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using NasaSpaceApps.Application.Interfaces;
+using NasaSpaceApps.Application.Services;
 using NasaSpaceApps.Domain.Entities;
 using NasaSpaceApps.Infrastructure.Data;
 
@@ -197,6 +198,43 @@ public sealed class NasaSpaceAppsRepository : INasaSpaceAppsRepository
             .Include(score => score.Criterion)
             .OrderByDescending(score => score.Timestamp)
             .ToListAsync();
+    }
+
+    public async Task<List<TeamStandingsEntry>> GetTeamStandingsAsync()
+    {
+        var teams = await _context.Teams.OrderBy(t => t.Name).ToListAsync();
+
+        var scores = await _context.JudgeScores
+            .Include(score => score.Criterion)
+            .ToListAsync();
+
+        var byTeam = scores
+            .GroupBy(score => score.TeamId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        var standings = new List<TeamStandingsEntry>();
+        foreach (var team in teams)
+        {
+            byTeam.TryGetValue(team.TeamId, out var teamScores);
+            var entries = (teamScores ?? new List<JudgeScore>())
+                .Select(score => new TeamStandingsScore(
+                    score.CriterionId,
+                    score.Criterion?.Name ?? $"Criterion {score.CriterionId}",
+                    score.Score,
+                    score.JudgeId))
+                .ToList();
+
+            standings.Add(new TeamStandingsEntry(
+                team.TeamId,
+                team.Name,
+                entries.Sum(e => e.Score),
+                entries));
+        }
+
+        return standings
+            .OrderByDescending(entry => entry.TotalScore)
+            .ThenBy(entry => entry.TeamName)
+            .ToList();
     }
 
     public async Task<List<JudgingCriterion>> GetJudgingCriteriaAsync()

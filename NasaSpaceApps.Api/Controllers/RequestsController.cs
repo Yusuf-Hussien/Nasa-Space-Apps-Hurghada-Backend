@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
+using NasaSpaceApps.Api.Hubs;
 using NasaSpaceApps.Application.Common;
 using NasaSpaceApps.Application.Services;
 using NasaSpaceApps.Domain.Entities;
@@ -13,11 +15,13 @@ public class RequestsController : ControllerBase
 {
     private readonly RequestService _requestService;
     private readonly ICurrentUser _currentUser;
+    private readonly IHubContext<RequestsHub> _hubContext;
 
-    public RequestsController(RequestService requestService, ICurrentUser currentUser)
+    public RequestsController(RequestService requestService, ICurrentUser currentUser, IHubContext<RequestsHub> hubContext)
     {
         _requestService = requestService;
         _currentUser = currentUser;
+        _hubContext = hubContext;
     }
 
     [HttpGet]
@@ -70,7 +74,7 @@ public class RequestsController : ControllerBase
             return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
         }
 
-        return Ok(new
+        var dto = new
         {
             requestId = result.Value!.RequestId,
             teamId = result.Value.TeamId,
@@ -78,7 +82,9 @@ public class RequestsController : ControllerBase
             status = result.Value.Status,
             createdAt = result.Value.CreatedAt,
             message = result.Value.Message
-        });
+        };
+        await _hubContext.Clients.Group("Organizers").SendAsync("RequestCreated", dto);
+        return Ok(dto);
     }
 
     [Authorize(Policy = "StaffOnly")]
@@ -91,7 +97,7 @@ public class RequestsController : ControllerBase
             return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
         }
 
-        return Ok(new
+        var dto = new
         {
             requestId = result.Value!.RequestId,
             teamId = result.Value.TeamId,
@@ -100,7 +106,9 @@ public class RequestsController : ControllerBase
             message = result.Value.Message,
             createdAt = result.Value.CreatedAt,
             resolvedAt = result.Value.ResolvedAt
-        });
+        };
+        await _hubContext.Clients.Group("Organizers").SendAsync("RequestUpdated", dto);
+        return Ok(dto);
     }
 
     [HttpDelete("{requestId:int}")]
@@ -112,7 +120,7 @@ public class RequestsController : ControllerBase
         {
             return StatusCode(result.Error!.HttpStatus, new { code = result.Error.Code, message = result.Error.Message });
         }
-
+        await _hubContext.Clients.Group("Organizers").SendAsync("RequestDeleted", requestId);
         return Ok(new { requestId, deleted = true });
     }
 }
