@@ -255,13 +255,18 @@ public sealed class NasaSpaceAppsRepository : INasaSpaceAppsRepository
             .FirstOrDefaultAsync(s => s.StaffId == staffId);
     }
 
-    public async Task<List<Staff>> GetStaffsAsync(string? role = null, string? search = null)
+    public async Task<List<Staff>> GetStaffsAsync(string? role = null, string? memberType = null, string? search = null)
     {
         var query = _context.Staff.AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(role))
         {
             query = query.Where(s => s.Role == role);
+        }
+
+        if (!string.IsNullOrWhiteSpace(memberType))
+        {
+            query = query.Where(s => s.MemberType == memberType);
         }
 
         if (!string.IsNullOrWhiteSpace(search))
@@ -281,6 +286,18 @@ public sealed class NasaSpaceAppsRepository : INasaSpaceAppsRepository
         _context.Staff.Add(staff);
         await _context.SaveChangesAsync();
         return staff;
+    }
+
+    public async Task UpdateStaffAsync(Staff staff)
+    {
+        _context.Staff.Update(staff);
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task DeleteStaffAsync(Staff staff)
+    {
+        _context.Staff.Remove(staff);
+        await _context.SaveChangesAsync();
     }
 
     // ---- Questions ----

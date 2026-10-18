@@ -31,8 +31,10 @@ public interface INasaSpaceAppsRepository
     // Staff (Admin / CoreTeam / Judge login pool)
     Task<Staff?> GetStaffByIdentifierAsync(string identifier);
     Task<Staff?> GetStaffByIdAsync(int staffId);
-    Task<List<Staff>> GetStaffsAsync(string? role = null, string? search = null);
+    Task<List<Staff>> GetStaffsAsync(string? role = null, string? memberType = null, string? search = null);
     Task<Staff> AddStaffAsync(Staff staff);
+    Task UpdateStaffAsync(Staff staff);
+    Task DeleteStaffAsync(Staff staff);
 
     // Questions
     Task<Question?> GetQuestionByIdAsync(int id);

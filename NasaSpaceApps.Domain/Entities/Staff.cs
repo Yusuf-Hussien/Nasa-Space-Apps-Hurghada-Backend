@@ -8,6 +8,7 @@ public class Staff
     public string Email { get; set; } = string.Empty;
     public string PasswordHash { get; set; } = string.Empty;
     public string Role { get; set; } = string.Empty;
+    public string? MemberType { get; set; }
     public string Status { get; set; } = "Active";
     public int? JudgeId { get; set; }
     public Judge? Judge { get; set; }

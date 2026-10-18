@@ -113,6 +113,29 @@ public static class DbInitializer
             Email = "core@nasa.local",
             PasswordHash = passwordHasher.Hash("Core123!"),
             Role = AppRoles.CoreTeam,
+            MemberType = CoreTeamTypes.Organizer,
+            Status = "Active"
+        };
+
+        var mentor1 = new Staff
+        {
+            FullName = "Sara Hassan",
+            Username = "sara.mentor",
+            Email = "sara.mentor@nasa.local",
+            PasswordHash = passwordHasher.Hash("Mentor123!"),
+            Role = AppRoles.CoreTeam,
+            MemberType = CoreTeamTypes.Mentor,
+            Status = "Active"
+        };
+
+        var dev1 = new Staff
+        {
+            FullName = "Omar Khaled",
+            Username = "omar.dev",
+            Email = "omar.dev@nasa.local",
+            PasswordHash = passwordHasher.Hash("Dev123!"),
+            Role = AppRoles.CoreTeam,
+            MemberType = CoreTeamTypes.Developer,
             Status = "Active"
         };
 
@@ -127,7 +150,7 @@ public static class DbInitializer
             Judge = judge
         };
 
-        context.Staff.AddRange(admin, coreTeam, judgeStaff);
+        context.Staff.AddRange(admin, coreTeam, mentor1, dev1, judgeStaff);
 
         var question1 = new Question
         {
@@ -227,6 +250,7 @@ BEGIN
         [Email] NVARCHAR(200) NOT NULL,
         [PasswordHash] NVARCHAR(500) NOT NULL,
         [Role] NVARCHAR(50) NOT NULL,
+        [MemberType] NVARCHAR(50) NULL,
         [Status] NVARCHAR(50) NOT NULL DEFAULT 'Active',
         [JudgeId] INT NULL,
         [CreatedAt] DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
@@ -234,6 +258,11 @@ BEGIN
     );
     CREATE UNIQUE INDEX [IX_Staff_Username] ON [Staff]([Username]);
     CREATE UNIQUE INDEX [IX_Staff_Email] ON [Staff]([Email]);
+END
+ELSE
+BEGIN
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Staff') AND name = 'MemberType')
+        ALTER TABLE [Staff] ADD [MemberType] NVARCHAR(50) NULL;
 END
 
 -- ============ Students ============
