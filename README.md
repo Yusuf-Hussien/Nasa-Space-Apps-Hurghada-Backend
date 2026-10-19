@@ -183,7 +183,8 @@ Invoke-WebRequest -Uri "http://localhost:5050/api/v1/challenges" -UseBasicParsin
 
 ## API Endpoints
 
-All routes use the `/api/v1` prefix.
+All routes use the `/api/v1` prefix. The full request/response contract for the
+frontend and mobile teams lives in [`Docs/API_CONTRACT.md`](Docs/API_CONTRACT.md).
 
 | Method | Route | Purpose |
 |---|---|---|
