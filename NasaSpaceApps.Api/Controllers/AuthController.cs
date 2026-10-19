@@ -4,6 +4,7 @@ using NasaSpaceApps.Api.Common;
 using NasaSpaceApps.Application.Common;
 using NasaSpaceApps.Application.Models;
 using NasaSpaceApps.Application.Services;
+using NasaSpaceApps.Domain.Entities;
 
 namespace NasaSpaceApps.Api.Controllers;
 
@@ -20,41 +21,37 @@ public class AuthController : ControllerBase
         _currentUser = currentUser;
     }
 
-    /// <summary>
-    /// Unified login. Staff: { identifier } (email or username) + password.
-    /// Participant: { teamId } + password.
-    /// </summary>
-    [HttpPost("login")]
-    public async Task<ActionResult<LoginResponse>> Login([FromBody] LoginRequest request)
-    {
-        var result = await _authService.LoginUnifiedAsync(
-            request.Identifier, request.TeamId, request.Password, request.RememberMe);
-        return result.ToHttpResult(this);
-    }
-
-    /// <summary>Staff login. Same contract as <see cref="Login"/> with identifier+password.</summary>
+    /// <summary>Staff login: identifier (email or username) + password.</summary>
     [HttpPost("login/staff")]
-    public async Task<ActionResult<LoginResponse>> LoginStaff([FromBody] LoginRequest request)
+    public async Task<ActionResult<StaffLoginResponse>> LoginStaff([FromBody] StaffLoginRequest request)
     {
-        var result = await _authService.LoginUnifiedAsync(
-            request.Identifier, null, request.Password, request.RememberMe);
-        return result.ToHttpResult(this);
+        var result = await _authService.LoginStaffAsync(
+            request.Identifier, request.Password, request.RememberMe);
+        return result.ToHttpResult(this, StaffLoginResponse.From);
     }
 
-    /// <summary>Participant login. Same contract as <see cref="Login"/> with teamId+password.</summary>
+    /// <summary>Participant login: teamId + password.</summary>
     [HttpPost("login/participant")]
-    public async Task<ActionResult<LoginResponse>> LoginParticipant([FromBody] LoginRequest request)
+    public async Task<ActionResult<ParticipantLoginResponse>> LoginParticipant([FromBody] ParticipantLoginRequest request)
     {
-        var result = await _authService.LoginUnifiedAsync(
-            null, request.TeamId, request.Password, request.RememberMe);
-        return result.ToHttpResult(this);
+        var result = await _authService.LoginParticipantAsync(
+            request.TeamId, request.Password, request.RememberMe);
+        return result.ToHttpResult(this, ParticipantLoginResponse.From);
     }
 
+    /// <summary>Current authenticated account. Returns the same shape as the matching login route.</summary>
     [Authorize]
     [HttpGet("me")]
-    public async Task<ActionResult<LoginResponse>> Me()
+    public async Task<ActionResult<object>> Me()
     {
         var result = await _authService.GetCurrentUserAsync(_currentUser);
-        return result.ToHttpResult(this);
+        return result.ToHttpResult<LoginResponse, object>(this, ToRoleSpecificResponse);
     }
+
+    /// <summary>Picks the response shape from the account's role, so neither role
+    /// receives the other's fields.</summary>
+    private static object ToRoleSpecificResponse(LoginResponse value) =>
+        string.Equals(value.Role, AppRoles.Participant, StringComparison.OrdinalIgnoreCase)
+            ? ParticipantLoginResponse.From(value)
+            : StaffLoginResponse.From(value);
 }

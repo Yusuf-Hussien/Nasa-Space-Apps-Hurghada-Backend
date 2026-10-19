@@ -187,7 +187,9 @@ All routes use the `/api/v1` prefix.
 
 | Method | Route | Purpose |
 |---|---|---|
-| `POST` | `/auth/login` | Log in a team and receive a JWT |
+| `POST` | `/auth/login/staff` | Staff login (`identifier` + `password`) and receive a JWT |
+| `POST` | `/auth/login/participant` | Participant login (`teamId` + `password`) and receive a JWT |
+| `GET` | `/auth/me` | Current authenticated account |
 | `GET` | `/teams` | Search or list teams |
 | `GET` | `/teams/{teamId}` | Get one team |
 | `GET` | `/teams/{teamId}/students` | Get team members |
@@ -198,16 +200,124 @@ All routes use the `/api/v1` prefix.
 | `GET` | `/requests` | Filter service requests |
 | `POST` | `/requests` | Create a service request |
 | `GET` | `/judging/criteria` | List judging criteria |
+| `GET` | `/judging/standings` | Public scoreboard |
 | `POST` | `/judging/scores` | Submit judge scores |
-| `GET` | `/standings` | Calculate team standings |
 | `GET` | `/sponsors` | List active sponsors |
 
-Example login using the development seed data:
+Example participant login using the development seed data:
 
 ```powershell
-$body = @{ username = "orion"; password = "Password123!" } | ConvertTo-Json
-Invoke-RestMethod -Method Post -Uri "http://localhost:5050/api/v1/auth/login" -ContentType "application/json" -Body $body
+$body = @{ teamId = 1; password = "Password123!" } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri "http://localhost:5050/api/v1/auth/login/participant" -ContentType "application/json" -Body $body
 ```
+
+## Roles and Permissions
+
+Authorization is a policy check against the JWT `role` claim. Every request carries the token in the standard `Authorization: Bearer <accessToken>` header. The Swagger **Authorize** button attaches it to all operations.
+
+### Roles
+
+| Role | Meaning |
+|---|---|
+| `Admin` | Full staff access, including staff management, sponsors, and questions |
+| `CoreTeam` | Organizers/mentors/developers/media; runs attendance and day-to-day operations |
+| `Judge` | Scores teams against the judging criteria |
+| `Participant` | A team; submits answers and service requests for its own team only |
+
+`CoreTeam` members also carry a `memberType` (`Organizer`, `Mentor`, `Developer`, `Marketing`, `PR`, `Media`, `Highboard`). This is descriptive metadata only and does **not** grant distinct permissions.
+
+### Policies
+
+Defined in `Program.cs`:
+
+| Policy | Grants access to |
+|---|---|
+| `AdminOnly` | `Admin` |
+| `CoreTeamOnly` | `CoreTeam` |
+| `JudgeOnly` | `Judge` |
+| `StaffOnly` | `Admin` or `CoreTeam` or `Judge` |
+| `ParticipantOnly` | `Participant` |
+
+### Access by endpoint
+
+Public (no token, or `[AllowAnonymous]`):
+
+- `POST /api/v1/auth/login/staff`, `POST /api/v1/auth/login/participant`
+- `GET /api/v1/challenges`, `GET /api/v1/challenges/{id}`
+- `GET /api/v1/teams` (the `username` field is hidden unless the caller is staff)
+- `GET /api/v1/sponsors`, `/sponsors/{id}`, `/sponsors/tiers`, `/sponsors/tiers/{id}`
+- `GET /api/v1/judging/standings`
+- `GET /api/v1/game/leaderboard`
+- SignalR hub `/hubs/judging`
+
+Any authenticated role:
+
+- `GET /api/v1/auth/me`
+- `GET /api/v1/requests` (participants are forced to their own team; staff may filter by any team)
+- `POST /api/v1/requests` (participants use their own team; staff may post for any team)
+- `DELETE /api/v1/requests/{id}` (participants are limited to their own team)
+- `GET /api/v1/questions`, `GET /api/v1/questions/{id}` (staff receive correct answers; participants see published questions with answers stripped)
+- `GET /api/v1/judging/criteria`
+- SignalR hub `/hubs/requests` (joining the `Organizers` group requires staff)
+
+`StaffOnly` — `Admin`, `CoreTeam`, `Judge`:
+
+- `GET /api/v1/teams/{id}`
+- `GET /api/v1/teams/{id}/students`
+- `PATCH /api/v1/requests/{id}` (resolve)
+- `GET /api/v1/judging/scores`
+- `GET /api/v1/attendance`
+
+`AdminOnly` — `Admin`:
+
+- All of `/api/v1/staff` (including `/staff/member-types`)
+- `POST`, `PUT`, `DELETE` on `/api/v1/sponsors` and `/api/v1/sponsors/tiers`
+- `POST`, `PUT`, `DELETE` on `/api/v1/questions`, plus `/questions/{id}/publish` and `/questions/{id}/unpublish`
+
+`CoreTeamOnly` — `CoreTeam`:
+
+- `GET /api/v1/attendance/teams` (check-in screen)
+- `POST /api/v1/attendance` (bulk upsert)
+
+`JudgeOnly` — `Judge`:
+
+- `POST /api/v1/judging/scores` (the `judgeId` comes from the token, never the body)
+
+`ParticipantOnly` — `Participant`:
+
+- `POST /api/v1/game/questions/{questionId}/answer`
+
+### Capability summary
+
+| Capability | Admin | CoreTeam | Judge | Participant |
+|---|:---:|:---:|:---:|:---:|
+| Browse challenges, teams, sponsors, public standings | Yes | Yes | Yes | Yes |
+| Read public leaderboard | Yes | Yes | Yes | Yes |
+| View team details and rosters | Yes | Yes | Yes | No |
+| View questions with correct answers | Yes | Yes | Yes | No |
+| Create / delete own team service requests | Yes | Yes | Yes | Own team only |
+| Resolve service requests | Yes | Yes | Yes | No |
+| Take attendance (check-in screen) | No | Yes | No | No |
+| List attendance records | Yes | Yes | Yes | No |
+| Submit judge scores | No | No | Yes | No |
+| List judging criteria | Yes | Yes | Yes | Yes |
+| Submit a side-trophy answer | No | No | No | Yes |
+| Manage staff, sponsors, questions | Yes | No | No | No |
+
+### Real-time hubs
+
+| Hub | Access | Purpose |
+|---|---|---|
+| `/hubs/judging` | Anonymous | Live score submissions and standings updates |
+| `/hubs/requests` | Authenticated | Request create/update/delete events; the `Organizers` group requires staff |
+
+### Notes and known gaps
+
+- `CoreTeam` members' `memberType` does not affect authorization.
+- `GET /api/v1/judging/criteria` requires authentication even though the standings are public.
+- `Admin` cannot access the attendance check-in screen (`/attendance/teams`, `POST /attendance`), which is restricted to `CoreTeam`.
+- `Judge` currently shares the full `StaffOnly` surface (requests, rosters, attendance) in addition to scoring.
+- Deactivating a staff member blocks new logins but does not revoke already-issued tokens; a token issued with `rememberMe` stays valid for up to 30 days.
 
 ## Seed Data
 

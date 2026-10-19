@@ -18,35 +18,8 @@ public sealed class AuthService
         _tokenService = tokenService;
     }
 
-    /// <summary>
-    /// Unified login. Staff provide { identifier } (email or username) + password.
-    /// Participants provide { teamId } + password.
-    /// </summary>
-    public async Task<Result<LoginResponse>> LoginUnifiedAsync(string? identifier, int? teamId, string password, bool rememberMe = false)
-    {
-        var hasIdentifier = !string.IsNullOrWhiteSpace(identifier);
-        var hasTeamId = teamId.HasValue && teamId.Value > 0;
-
-        if (hasTeamId && hasIdentifier)
-        {
-            return Result<LoginResponse>.Failure(
-                "auth.ambiguous", 400,
-                "Provide either teamId (participant) or identifier (staff), not both.");
-        }
-
-        if (!hasTeamId && !hasIdentifier)
-        {
-            return Result<LoginResponse>.Failure(
-                "auth.missing_identifier", 400,
-                "Provide teamId (participant) or identifier (staff) to sign in.");
-        }
-
-        return hasTeamId
-            ? await LoginParticipantAsync(teamId!.Value, password, rememberMe)
-            : await LoginStaffAsync(identifier!.Trim(), password, rememberMe);
-    }
-
-    private async Task<Result<LoginResponse>> LoginParticipantAsync(int teamId, string password, bool rememberMe)
+    /// <summary>Participant login: teamId + password.</summary>
+    public async Task<Result<LoginResponse>> LoginParticipantAsync(int teamId, string password, bool rememberMe = false)
     {
         var team = await _repository.GetTeamByIdAsync(teamId);
 
@@ -71,9 +44,10 @@ public sealed class AuthService
         return Result<LoginResponse>.Success(response);
     }
 
-    private async Task<Result<LoginResponse>> LoginStaffAsync(string identifier, string password, bool rememberMe)
+    /// <summary>Staff login: identifier (email or username) + password.</summary>
+    public async Task<Result<LoginResponse>> LoginStaffAsync(string identifier, string password, bool rememberMe = false)
     {
-        var staff = await _repository.GetStaffByIdentifierAsync(identifier);
+        var staff = await _repository.GetStaffByIdentifierAsync(identifier.Trim());
 
         if (staff is null || !staff.Status.Equals("Active", StringComparison.OrdinalIgnoreCase))
         {
