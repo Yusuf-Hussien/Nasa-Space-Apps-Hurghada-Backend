@@ -10,6 +10,7 @@ public sealed record TeamSummaryResponse(
     int TeamId,
     string Name,
     string? Username,
+    string? Logo,
     string Status)
 {
     public static TeamSummaryResponse From(Team team, bool includeUsername) =>
@@ -17,5 +18,6 @@ public sealed record TeamSummaryResponse(
             TeamId: team.TeamId,
             Name: team.Name,
             Username: includeUsername ? team.Username : null,
+            Logo: team.Logo,
             Status: team.Status);
 }

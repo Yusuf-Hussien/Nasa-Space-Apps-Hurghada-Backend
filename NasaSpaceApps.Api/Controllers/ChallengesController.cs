@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using NasaSpaceApps.Api.Common;
 using NasaSpaceApps.Application.Services;
 
@@ -26,6 +27,15 @@ public class ChallengesController : ControllerBase
     public async Task<ActionResult<ChallengeResponse>> GetChallenge(int challengeId)
     {
         var result = await _challengeService.GetChallengeAsync(challengeId);
+        return result.ToHttpResult(this, ChallengeResponse.From);
+    }
+
+    /// <summary>Set or clear a challenge's image. Body: <c>{ "image": "&lt;base64|url&gt;" }</c> (max 20 MB decoded).</summary>
+    [Authorize(Policy = "AdminOnly")]
+    [HttpPatch("{challengeId:int}/image")]
+    public async Task<ActionResult<ChallengeResponse>> SetChallengeImage(int challengeId, [FromBody] ImageInput input)
+    {
+        var result = await _challengeService.SetImageAsync(challengeId, input.Image);
         return result.ToHttpResult(this, ChallengeResponse.From);
     }
 }

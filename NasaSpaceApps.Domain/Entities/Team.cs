@@ -8,6 +8,7 @@ public class Team
     public string PasswordHash { get; set; } = string.Empty;
     public int ChallengeId { get; set; }
     public Challenge? Challenge { get; set; }
+    public string? Logo { get; set; }
     public string Status { get; set; } = "Active";
     public ICollection<Student> Students { get; set; } = new List<Student>();
     public Project? Project { get; set; }

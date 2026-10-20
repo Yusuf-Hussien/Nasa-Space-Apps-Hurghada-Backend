@@ -8,4 +8,5 @@ public sealed record StaffUpdateInput(
     string? Password,
     string Role,
     string? MemberType = null,
-    string? Status = null);
+    string? Status = null,
+    string? Photo = null);

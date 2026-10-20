@@ -29,6 +29,37 @@ per caller (e.g. teams hide `username` from non-staff; questions hide
 `correctAnswer` from participants). Each endpoint below is labelled with the
 policy that guards it.
 
+### 1.1 Images
+
+Images are transported as **base64 strings** and stored in the database - there
+is no file upload and no static-file hosting. A single image field may hold
+either:
+
+- plain base64 (e.g. `"iVBORw0KGgo..."`), or
+- a full data URI (e.g. `"data:image/png;base64,iVBORw0KGgo..."`), or
+- a legacy absolute `http(s)` URL (passed through untouched).
+
+Limits and rules (`ImageValidator`):
+
+| Rule | Value |
+| --- | --- |
+| Max size | **20 MB measured after base64-decoding** (so the JSON string is ~26.7 MB) |
+| Allowed types (when a data URI is used) | `image/png`, `image/jpeg`, `image/jpg`, `image/webp`, `image/gif`, `image/svg+xml` |
+| Encoding | standard base64 |
+| Clearing | send `null` or `""` to remove the image |
+
+Image fields live on: `Sponsor.logo`, `Staff.photo` (core team), `Team.logo`,
+`Challenge.image`, and `SeasonMedia.image`. They are written either inline on
+the owning `POST`/`PUT` payload (sponsor, staff, season media) or via a
+dedicated `PATCH .../image` / `.../logo` route (challenge, team).
+
+On failure the standard error envelope is returned with one of:
+`image.invalid_type`, `image.invalid_base64`, `image.too_large`.
+
+> Because images are stored inline in the database, list endpoints that return
+> them (teams, sponsors, season media, challenges) can be large. Prefer sending
+> the raw base64 with a data URI prefix so the client can render directly.
+
 ---
 
 ## 2. Authentication & roles
@@ -79,7 +110,7 @@ Full catalogue of codes (HTTP status in parentheses):
 
 | Code | Meaning |
 | --- | --- |
-| `auth.invalid_credentials` (401) | Bad identifier/password, or inactive account/team. |
+| `auth.invalid_credentials` (401) | Bad identifier/username/password, or inactive account/team. |
 | `user.not_found` (404) | `/auth/me` - the token's account no longer exists. |
 | `user.unauthenticated` (401) | `/auth/me` - no resolvable identity. |
 | `challenge.not_found` (404) | Challenge id does not exist. |
@@ -113,6 +144,11 @@ Full catalogue of codes (HTTP status in parentheses):
 | `criterion.not_found` (404) | Score references an unknown criterion. |
 | `score.invalid` (400) | Score out of `[0, criterion.maxScore]`. |
 | `judging.no_judge_link` (403) | Judge token has no linked judge profile. |
+| `season_media.not_found` (404) | Season-media id does not exist. |
+| `season_media.invalid` (400) | Season or title missing. |
+| `image.invalid_type` (400) | Data-URI MIME type not in the allowed image list. |
+| `image.invalid_base64` (400) | Image value is not valid base64. |
+| `image.too_large` (400) | Image exceeds the 20 MB limit after decoding. |
 
 ---
 
@@ -150,14 +186,15 @@ Free-form string (no server-side whitelist). Suggested UI values:
 | Area | Public reads | Any authenticated | Admin | CoreTeam | Judge | Participant |
 | --- | --- | --- | --- | --- | --- | --- |
 | Auth | login routes | `me` | - | - | - | - |
-| Challenges | list, get | - | - | - | - | - |
-| Teams | list | - | - | detail, students (Staff) | - | - |
+| Challenges | list, get | - | set image | - | - | - |
+| Teams | list | - | - | detail, students (Staff); set logo (Admin) | - | - |
 | Attendance | - | list (Staff) | - | teams, bulk mark | - | - |
 | Requests | - | list/create/delete | - | resolve (Staff) | - | - |
 | Sponsors | list, tiers, get | - | create/update/delete | - | - | - |
 | Questions | - | list, get | create/update/publish/delete | - | - | - |
 | Judging | standings | criteria | - | - | submit scores | - |
 | Game | leaderboard | - | - | - | - | submit answer |
+| Season media | list, get | - | create/update/delete | - | - | - |
 | Staff | - | - | all | - | - | - |
 
 ---
@@ -184,27 +221,37 @@ Body:
 `judgeId` is non-null for Judge accounts. Errors: `auth.invalid_credentials`.
 
 ### 5.2 `POST /auth/login/participant` - Public
-Body:
+`username` is the team's unique login username (case-insensitive). Body:
 ```json
-{ "teamId": 1, "password": "Password123!", "rememberMe": false }
+{ "username": "orion", "password": "Password123!", "rememberMe": false }
 ```
-Response `200`:
+Response `200` - carries the team's own record, its challenge, and its roster
+so the mobile dashboard needs no extra calls:
 ```json
 {
   "accessToken": "eyJ...",
   "role": "Participant",
-  "name": "Orion",
   "teamId": 1,
-  "username": "orion"
+  "team": { "teamId": 1, "name": "Orion", "username": "orion", "status": "Active" },
+  "challenge": {
+    "challengeId": 1, "title": "Mars Habitat Challenge",
+    "description": "...", "source": "NASA Space Apps", "season": "2026"
+  },
+  "students": [
+    { "studentId": 1, "name": "Aisha Ali", "email": "aisha@example.com", "contact": "555-1001", "status": "Active" }
+  ]
 }
 ```
-No `email`/`staffId`/`judgeId` fields. Errors: `auth.invalid_credentials`.
+`challenge.challengeId` is `0` and the text fields are `null` if the team has no
+linked challenge. No `email`/`staffId`/`judgeId` fields at the top level.
+Errors: `auth.invalid_credentials`.
 
 ### 5.3 `GET /auth/me` - Any authenticated
-Returns the same shape as the matching login route (staff shape for staff,
-participant shape for a team). The token is **not** re-issued - `accessToken`
-is always the empty string `""` here (the field exists only for shape
-compatibility). Errors: `user.not_found`, `user.unauthenticated`.
+Returns the same shape as the matching login route (staff shape for staff, the
+participant shape of §5.2 for a team - including `team`, `challenge`, and
+`students`). The token is **not** re-issued - `accessToken` is always the empty
+string `""` here (the field exists only for shape compatibility).
+Errors: `user.not_found`, `user.unauthenticated`.
 
 ---
 
@@ -213,11 +260,17 @@ compatibility). Errors: `user.not_found`, `user.unauthenticated`.
 ### 6.1 `GET /challenges`
 `200` → array of:
 ```json
-{ "challengeId": 1, "title": "Mars Habitat Challenge", "description": "...", "source": "NASA Space Apps", "season": "2026" }
+{ "challengeId": 1, "title": "Mars Habitat Challenge", "description": "...", "source": "NASA Space Apps", "season": "2026", "image": "data:image/png;base64,..." }
 ```
+`image` is null when unset (§1.1).
 
 ### 6.2 `GET /challenges/{challengeId}`
 `200` → one `ChallengeResponse`. Errors: `challenge.not_found`.
+
+### 6.3 `PATCH /challenges/{challengeId}/image` - `AdminOnly`
+Body: `{ "image": "<base64|data-uri|url|null>" }`. `200` → updated
+`ChallengeResponse`. Errors: `challenge.not_found`, `image.invalid_type`,
+`image.invalid_base64`, `image.too_large`.
 
 ---
 
@@ -225,15 +278,15 @@ compatibility). Errors: `user.not_found`, `user.unauthenticated`.
 
 ### 7.1 `GET /teams?search=` - Public
 `200` → array of `TeamSummaryResponse`. `username` is populated **only for
-staff callers**; non-staff receive `"username": null`.
+staff callers**; non-staff receive `"username": null`. `logo` is public.
 ```json
-{ "teamId": 1, "name": "Orion", "username": "orion", "status": "Active" }
+{ "teamId": 1, "name": "Orion", "username": "orion", "logo": null, "status": "Active" }
 ```
 
 ### 7.2 `GET /teams/{teamId}` - `StaffOnly`
 `200` → `TeamDetailResponse` (includes `username`):
 ```json
-{ "teamId": 1, "name": "Orion", "username": "orion", "status": "Active", "challengeId": 1 }
+{ "teamId": 1, "name": "Orion", "username": "orion", "logo": null, "status": "Active", "challengeId": 1 }
 ```
 Errors: `team.not_found`.
 
@@ -242,6 +295,11 @@ Errors: `team.not_found`.
 ```json
 { "studentId": 1, "name": "Aisha Ali", "email": "aisha@example.com", "contact": "555-1001", "status": "Active" }
 ```
+
+### 7.4 `PATCH /teams/{teamId}/logo` - `AdminOnly`
+Body: `{ "image": "<base64|data-uri|url|null>" }`. `200` → updated
+`TeamDetailResponse`. Errors: `team.not_found`, `image.invalid_type`,
+`image.invalid_base64`, `image.too_large`.
 
 ---
 
@@ -344,11 +402,12 @@ Broadcasts. Errors: `request.not_found`, in-code `403 request.forbidden`.
 `200` → array of `SponsorResponse` (each embeds its `tier`):
 ```json
 {
-  "sponsorId": 1, "name": "NASA Partner", "logo": "https://...", "link": "https://...",
+  "sponsorId": 1, "name": "NASA Partner", "logo": "data:image/png;base64,...", "link": "https://...",
   "tierId": 1, "tier": { "tierId": 1, "name": "Tier 1", "priority": 1, "bannerEnabled": true },
   "active": true, "displayOrder": 1
 }
 ```
+`logo` is a base64 image, a data URI, or a URL (§1.1).
 
 ### 10.2 `GET /sponsors/{sponsorId}` - Public
 `200` → one `SponsorResponse`. Errors: `sponsor.not_found`.
@@ -356,14 +415,16 @@ Broadcasts. Errors: `request.not_found`, in-code `403 request.forbidden`.
 ### 10.3 `POST /sponsors` - `AdminOnly`
 Body:
 ```json
-{ "name": "NASA Partner", "logo": "https://...", "link": "https://...", "tierId": 1, "active": true, "displayOrder": 1 }
+{ "name": "NASA Partner", "logo": "data:image/png;base64,...", "link": "https://...", "tierId": 1, "active": true, "displayOrder": 1 }
 ```
-`logo`, `link`, `displayOrder` optional/nullable. The returned sponsor's `tier`
-is `null` (created/updated responses omit the nested tier). Errors:
-`sponsor.invalid`, `sponsor.tier_not_found`.
+`logo` (base64/data-URI/URL, §1.1), `link`, `displayOrder` optional/nullable.
+The returned sponsor's `tier` is `null` (created/updated responses omit the
+nested tier). Errors: `sponsor.invalid`, `sponsor.tier_not_found`,
+`image.invalid_type`, `image.invalid_base64`, `image.too_large`.
 
 ### 10.4 `PUT /sponsors/{sponsorId}` - `AdminOnly`
-Same body & response as create. Errors: `sponsor.not_found`, `sponsor.invalid`, `sponsor.tier_not_found`.
+Same body & response as create. Errors: `sponsor.not_found`, `sponsor.invalid`,
+`sponsor.tier_not_found`, plus the `image.*` errors.
 
 ### 10.5 `DELETE /sponsors/{sponsorId}` - `AdminOnly`
 `200` → `{ "id": 1, "deleted": true }`. Errors: `sponsor.not_found`.
@@ -529,10 +590,11 @@ a zero-based index as a string. Errors: `question.not_found`, `answer.empty`,
 ```json
 {
   "staffId": 1, "fullName": "Event Admin", "username": "admin", "email": "admin@nasa.local",
-  "role": "Admin", "memberType": null, "status": "Active", "judgeId": null,
+  "role": "Admin", "memberType": null, "photo": null, "status": "Active", "judgeId": null,
   "createdAt": "2026-10-04T09:30:00Z"
 }
 ```
+`photo` is the core-team member's picture (base64/data-URI/URL, §1.1).
 
 ### 14.2 `GET /staff/{staffId}` - `AdminOnly`
 `200` → one `StaffResponse`. Errors: `staff.not_found`.
@@ -541,28 +603,32 @@ a zero-based index as a string. Errors: `question.not_found`, `answer.empty`,
 ```json
 {
   "fullName": "Sara Hassan", "username": "sara.mentor", "email": "sara.mentor@nasa.local",
-  "password": "Mentor123!", "role": "CoreTeam", "memberType": "Mentor"
+  "password": "Mentor123!", "role": "CoreTeam", "memberType": "Mentor",
+  "photo": "data:image/jpeg;base64,..."
 }
 ```
 Rules: `fullName`/`username`/`email` required; `password` required, ≥ 6 chars;
-`role` ∈ Admin/CoreTeam/Judge; CoreTeam requires a valid `memberType`. Creating
-a Judge auto-creates a linked Judge profile and returns a non-null `judgeId`.
+`role` ∈ Admin/CoreTeam/Judge; CoreTeam requires a valid `memberType`; `photo`
+optional (base64/data-URI/URL, §1.1). Creating a Judge auto-creates a linked
+Judge profile and returns a non-null `judgeId`.
 Errors: `staff.invalid`, `staff.invalid_role`, `staff.weak_password`,
 `staff.username_taken`, `staff.email_taken`, `staff.member_type_required`,
-`staff.invalid_member_type`.
+`staff.invalid_member_type`, `image.invalid_type`, `image.invalid_base64`,
+`image.too_large`.
 
 ### 14.4 `PUT /staff/{staffId}` - `AdminOnly`
 ```json
 {
   "fullName": "Sara Hassan", "username": "sara.mentor", "email": "sara@nasa.local",
-  "password": null, "role": "CoreTeam", "memberType": "Mentor", "status": "Active"
+  "password": null, "role": "CoreTeam", "memberType": "Mentor", "status": "Active",
+  "photo": "data:image/jpeg;base64,..."
 }
 ```
 `password` is optional (omit/`null` to keep it; ≥ 6 chars if provided).
 `status` is optional; only `Active`/`Inactive` are accepted (other values are
-ignored). Changing the role to `Judge` auto-creates a linked judge; changing
-away from `Judge` clears the link. Errors: `staff.not_found`, plus the create
-errors.
+ignored). `photo` replaces the picture (send `null`/`""` to clear). Changing the
+role to `Judge` auto-creates a linked judge; changing away from `Judge` clears
+the link. Errors: `staff.not_found`, plus the create errors.
 
 ### 14.4b Status shortcuts
 - `PATCH /staff/{staffId}/deactivate` - sets `Inactive` (no login thereafter).
@@ -574,6 +640,45 @@ Hard delete. `200` → `{ "id": 1, "deleted": true }`. Errors: `staff.not_found`
 
 ### 14.6 `GET /staff/member-types` - `AdminOnly`
 `200` → `["Organizer","Mentor","Developer","Marketing","PR","Media","Highboard"]`.
+
+---
+
+## 14b. Season media (landing page)
+
+Past-season photos/footage shown on the public site.
+
+### 14b.1 `GET /seasonmedia?includeInactive=false` - Public
+`200` → array of:
+```json
+{
+  "mediaId": 1, "season": "2025", "title": "Global Hackathon Highlights",
+  "description": "Footage from the 2025 season.", "image": "data:image/png;base64,...",
+  "link": "https://example.com/2025-highlights", "mediaType": "video",
+  "displayOrder": 1, "active": true
+}
+```
+`image` is base64/data-URI/URL (§1.1); `link` is an optional external URL;
+`mediaType` is free-form (`image`, `video`, ...).
+
+### 14b.2 `GET /seasonmedia/{mediaId}` - Public
+`200` → one item. Errors: `season_media.not_found`.
+
+### 14b.3 `POST /seasonmedia` - `AdminOnly`
+```json
+{
+  "season": "2025", "title": "Global Hackathon Highlights", "description": "...",
+  "image": "data:image/png;base64,...", "link": "https://...", "mediaType": "video",
+  "displayOrder": 1, "active": true
+}
+```
+`season` and `title` required. `200` → created item. Errors: `season_media.invalid`,
+`image.invalid_type`, `image.invalid_base64`, `image.too_large`.
+
+### 14b.4 `PUT /seasonmedia/{mediaId}` - `AdminOnly`
+Same body & response as create. Errors: `season_media.not_found`, `season_media.invalid`, `image.*`.
+
+### 14b.5 `DELETE /seasonmedia/{mediaId}` - `AdminOnly`
+`200` → `{ "id": 1, "deleted": true }`. Errors: `season_media.not_found`.
 
 ---
 
@@ -609,8 +714,8 @@ Events (server → client):
 Staff (login via `/auth/login/staff`): `admin`/`Admin123!`, `coreteam`/`Core123!`,
 `sara.mentor`/`Mentor123!`, `omar.dev`/`Dev123!`, `judge`/`Judge123!`.
 
-Teams (login via `/auth/login/participant`): `teamId 1` (Orion) and `teamId 2`
-(Atlas), password `Password123!`.
+Teams (login via `/auth/login/participant` with their username): `orion` and
+`atlas`, password `Password123!`.
 
 ---
 

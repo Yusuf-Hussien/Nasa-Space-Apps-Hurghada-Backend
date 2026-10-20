@@ -189,13 +189,15 @@ frontend and mobile teams lives in [`Docs/API_CONTRACT.md`](Docs/API_CONTRACT.md
 | Method | Route | Purpose |
 |---|---|---|
 | `POST` | `/auth/login/staff` | Staff login (`identifier` + `password`) and receive a JWT |
-| `POST` | `/auth/login/participant` | Participant login (`teamId` + `password`) and receive a JWT |
+| `POST` | `/auth/login/participant` | Participant login (`username` + `password`) and receive a JWT plus team/challenge details |
 | `GET` | `/auth/me` | Current authenticated account |
 | `GET` | `/teams` | Search or list teams |
 | `GET` | `/teams/{teamId}` | Get one team |
 | `GET` | `/teams/{teamId}/students` | Get team members |
+| `PATCH` | `/teams/{teamId}/logo` | Set team logo (Admin, base64 ≤ 20 MB) |
 | `GET` | `/challenges` | List challenges |
 | `GET` | `/challenges/{challengeId}` | Get one challenge |
+| `PATCH` | `/challenges/{challengeId}/image` | Set challenge image (Admin, base64 ≤ 20 MB) |
 | `GET` | `/attendance` | List attendance records |
 | `POST` | `/attendance` | Record attendance |
 | `GET` | `/requests` | Filter service requests |
@@ -204,11 +206,13 @@ frontend and mobile teams lives in [`Docs/API_CONTRACT.md`](Docs/API_CONTRACT.md
 | `GET` | `/judging/standings` | Public scoreboard |
 | `POST` | `/judging/scores` | Submit judge scores |
 | `GET` | `/sponsors` | List active sponsors |
+| `GET` | `/seasonmedia` | List season media (public) |
+| `POST` | `/seasonmedia` | Create season media (Admin, base64 ≤ 20 MB) |
 
 Example participant login using the development seed data:
 
 ```powershell
-$body = @{ teamId = 1; password = "Password123!" } | ConvertTo-Json
+$body = @{ username = "orion"; password = "Password123!" } | ConvertTo-Json
 Invoke-RestMethod -Method Post -Uri "http://localhost:5050/api/v1/auth/login/participant" -ContentType "application/json" -Body $body
 ```
 
@@ -247,6 +251,7 @@ Public (no token, or `[AllowAnonymous]`):
 - `GET /api/v1/challenges`, `GET /api/v1/challenges/{id}`
 - `GET /api/v1/teams` (the `username` field is hidden unless the caller is staff)
 - `GET /api/v1/sponsors`, `/sponsors/{id}`, `/sponsors/tiers`, `/sponsors/tiers/{id}`
+- `GET /api/v1/seasonmedia`, `/seasonmedia/{id}`
 - `GET /api/v1/judging/standings`
 - `GET /api/v1/game/leaderboard`
 - SignalR hub `/hubs/judging`
@@ -274,6 +279,8 @@ Any authenticated role:
 - All of `/api/v1/staff` (including `/staff/member-types`)
 - `POST`, `PUT`, `DELETE` on `/api/v1/sponsors` and `/api/v1/sponsors/tiers`
 - `POST`, `PUT`, `DELETE` on `/api/v1/questions`, plus `/questions/{id}/publish` and `/questions/{id}/unpublish`
+- `PATCH /api/v1/teams/{id}/logo`, `PATCH /api/v1/challenges/{id}/image`
+- `POST`, `PUT`, `DELETE` on `/api/v1/seasonmedia`
 
 `CoreTeamOnly` — `CoreTeam`:
 

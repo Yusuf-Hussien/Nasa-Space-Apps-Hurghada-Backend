@@ -12,5 +12,6 @@ public class Staff
     public string Status { get; set; } = "Active";
     public int? JudgeId { get; set; }
     public Judge? Judge { get; set; }
+    public string? Photo { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

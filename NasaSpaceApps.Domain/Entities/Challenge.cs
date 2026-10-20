@@ -8,6 +8,7 @@ public class Challenge
     public string? Source { get; set; }
     public string? Season { get; set; }
     public string? Metadata { get; set; }
+    public string? Image { get; set; }
     public ICollection<Team> Teams { get; set; } = new List<Team>();
     public ICollection<Question> Questions { get; set; } = new List<Question>();
 }

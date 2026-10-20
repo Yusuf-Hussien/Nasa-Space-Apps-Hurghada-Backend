@@ -7,9 +7,10 @@ public sealed record TeamDetailResponse(
     int TeamId,
     string Name,
     string Username,
+    string? Logo,
     string Status,
     int ChallengeId)
 {
     public static TeamDetailResponse From(Team team) =>
-        new(team.TeamId, team.Name, team.Username, team.Status, team.ChallengeId);
+        new(team.TeamId, team.Name, team.Username, team.Logo, team.Status, team.ChallengeId);
 }

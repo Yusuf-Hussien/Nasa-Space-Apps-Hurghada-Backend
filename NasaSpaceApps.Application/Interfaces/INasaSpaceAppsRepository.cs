@@ -56,6 +56,15 @@ public interface INasaSpaceAppsRepository
     Task<Question> AddQuestionAsync(Question question);
     Task UpdateQuestionAsync(Question question);
 
+    // Images / media
+    Task UpdateTeamAsync(Team team);
+    Task UpdateChallengeAsync(Challenge challenge);
+    Task<List<SeasonMedia>> GetSeasonMediaAsync(bool activeOnly = true);
+    Task<SeasonMedia?> GetSeasonMediaByIdAsync(int mediaId);
+    Task<SeasonMedia> AddSeasonMediaAsync(SeasonMedia media);
+    Task UpdateSeasonMediaAsync(SeasonMedia media);
+    Task DeleteSeasonMediaAsync(SeasonMedia media);
+
     // Game (side trophy)
     Task<List<GameParticipation>> GetParticipationsAsync(int questionId);
     Task<GameParticipation?> GetParticipationAsync(int questionId, int teamId);

@@ -10,6 +10,7 @@ public sealed record StaffResponse(
     string Email,
     string Role,
     string? MemberType,
+    string? Photo,
     string Status,
     int? JudgeId,
     DateTime CreatedAt)
@@ -22,6 +23,7 @@ public sealed record StaffResponse(
             Email: staff.Email,
             Role: staff.Role,
             MemberType: staff.MemberType,
+            Photo: staff.Photo,
             Status: staff.Status,
             JudgeId: staff.JudgeId,
             CreatedAt: staff.CreatedAt);

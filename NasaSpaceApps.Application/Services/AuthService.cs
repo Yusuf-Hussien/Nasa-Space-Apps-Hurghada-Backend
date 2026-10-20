@@ -18,28 +18,31 @@ public sealed class AuthService
         _tokenService = tokenService;
     }
 
-    /// <summary>Participant login: teamId + password.</summary>
-    public async Task<Result<LoginResponse>> LoginParticipantAsync(int teamId, string password, bool rememberMe = false)
+    /// <summary>Participant login: team username + password.</summary>
+    public async Task<Result<LoginResponse>> LoginParticipantAsync(string username, string password, bool rememberMe = false)
     {
-        var team = await _repository.GetTeamByIdAsync(teamId);
+        var team = await _repository.GetTeamByUsernameAsync(username?.Trim() ?? string.Empty);
 
         if (team is null || !team.Status.Equals("Active", StringComparison.OrdinalIgnoreCase))
         {
-            return Result<LoginResponse>.Failure("auth.invalid_credentials", 401, "Invalid teamId or password.");
+            return Result<LoginResponse>.Failure("auth.invalid_credentials", 401, "Invalid username or password.");
         }
 
         if (!_passwordHasher.Verify(password, team.PasswordHash))
         {
-            return Result<LoginResponse>.Failure("auth.invalid_credentials", 401, "Invalid teamId or password.");
+            return Result<LoginResponse>.Failure("auth.invalid_credentials", 401, "Invalid username or password.");
         }
 
+        var students = await _repository.GetStudentsByTeamIdAsync(team.TeamId);
         var token = _tokenService.CreateParticipantToken(team, rememberMe);
         var response = new LoginResponse(
             AccessToken: token,
             Role: AppRoles.Participant,
             Name: team.Name,
             TeamId: team.TeamId,
-            Username: team.Username);
+            Username: team.Username,
+            Team: team,
+            TeamStudents: students);
 
         return Result<LoginResponse>.Success(response);
     }
@@ -82,12 +85,16 @@ public sealed class AuthService
                 return Result<LoginResponse>.Failure("user.not_found", 404, "Team not found.");
             }
 
+            var students = await _repository.GetStudentsByTeamIdAsync(team.TeamId);
+
             return Result<LoginResponse>.Success(new LoginResponse(
                 AccessToken: string.Empty,
                 Role: AppRoles.Participant,
                 Name: team.Name,
                 TeamId: team.TeamId,
-                Username: team.Username));
+                Username: team.Username,
+                Team: team,
+                TeamStudents: students));
         }
 
         if (user.StaffId.HasValue)

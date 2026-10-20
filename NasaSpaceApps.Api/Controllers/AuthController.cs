@@ -30,13 +30,14 @@ public class AuthController : ControllerBase
         return result.ToHttpResult(this, StaffLoginResponse.From);
     }
 
-    /// <summary>Participant login: teamId + password.</summary>
+    /// <summary>Participant login: team username + password. Returns the team's details, challenge, and roster.</summary>
     [HttpPost("login/participant")]
     public async Task<ActionResult<ParticipantLoginResponse>> LoginParticipant([FromBody] ParticipantLoginRequest request)
     {
         var result = await _authService.LoginParticipantAsync(
-            request.TeamId, request.Password, request.RememberMe);
-        return result.ToHttpResult(this, ParticipantLoginResponse.From);
+            request.Username, request.Password, request.RememberMe);
+        return result.ToHttpResult<LoginResponse, ParticipantLoginResponse>(this, value =>
+            ParticipantLoginResponse.From(value.AccessToken, value.Team!, value.TeamStudents ?? []));
     }
 
     /// <summary>Current authenticated account. Returns the same shape as the matching login route.</summary>
@@ -52,6 +53,6 @@ public class AuthController : ControllerBase
     /// receives the other's fields.</summary>
     private static object ToRoleSpecificResponse(LoginResponse value) =>
         string.Equals(value.Role, AppRoles.Participant, StringComparison.OrdinalIgnoreCase)
-            ? ParticipantLoginResponse.From(value)
+            ? ParticipantLoginResponse.From(value.AccessToken, value.Team!, value.TeamStudents ?? [])
             : StaffLoginResponse.From(value);
 }

@@ -91,6 +91,7 @@ builder.Services.AddScoped<SponsorService>();
 builder.Services.AddScoped<QuestionService>();
 builder.Services.AddScoped<GameService>();
 builder.Services.AddScoped<StaffService>();
+builder.Services.AddScoped<SeasonMediaService>();
 
 // CORS: allow all origins for now; restrict after deployment
 builder.Services.AddCors(options =>

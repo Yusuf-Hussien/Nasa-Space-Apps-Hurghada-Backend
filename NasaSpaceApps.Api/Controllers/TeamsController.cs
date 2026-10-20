@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NasaSpaceApps.Api.Common;
 using NasaSpaceApps.Application.Services;
@@ -40,5 +40,14 @@ public class TeamsController : ControllerBase
     {
         var result = await _teamService.GetStudentsAsync(teamId);
         return result.ToHttpResult(this, students => students.Select(StudentResponse.From).ToList());
+    }
+
+    /// <summary>Set or clear a team's logo. Body: <c>{ "image": "&lt;base64|url&gt;" }</c> (max 20 MB decoded).</summary>
+    [Authorize(Policy = "AdminOnly")]
+    [HttpPatch("{teamId:int}/logo")]
+    public async Task<ActionResult<TeamDetailResponse>> SetTeamLogo(int teamId, [FromBody] ImageInput input)
+    {
+        var result = await _teamService.SetLogoAsync(teamId, input.Image);
+        return result.ToHttpResult(this, TeamDetailResponse.From);
     }
 }

@@ -46,6 +46,12 @@ public sealed class StaffService
             return Result<Staff>.Failure("staff.weak_password", 400, "Password must be at least 6 characters.");
         }
 
+        var photoError = ImageValidator.Validate(input.Photo, "photo");
+        if (photoError is not null)
+        {
+            return Result<Staff>.Failure(photoError.Code, 400, photoError.Message);
+        }
+
         var normalizedRole = AppRoles.StaffRoles.First(r => r.Equals(input.Role, StringComparison.OrdinalIgnoreCase));
         var username = input.Username.Trim();
         var email = input.Email.Trim();
@@ -70,6 +76,7 @@ public sealed class StaffService
             PasswordHash = _passwordHasher.Hash(input.Password),
             Role = normalizedRole,
             MemberType = ResolveMemberType(normalizedRole, input.MemberType),
+            Photo = string.IsNullOrWhiteSpace(input.Photo) ? null : input.Photo.Trim(),
             Status = "Active"
         };
 
@@ -119,6 +126,12 @@ public sealed class StaffService
             return Result<Staff>.Failure("staff.email_taken", 409, "Email is already registered.");
         }
 
+        var photoError = ImageValidator.Validate(input.Photo, "photo");
+        if (photoError is not null)
+        {
+            return Result<Staff>.Failure(photoError.Code, 400, photoError.Message);
+        }
+
         // Password change (optional, only if provided)
         if (!string.IsNullOrWhiteSpace(input.Password))
         {
@@ -132,11 +145,13 @@ public sealed class StaffService
 
         var roleChanged = !staff.Role.Equals(normalizedRole, StringComparison.OrdinalIgnoreCase);
 
+
         staff.FullName = input.FullName.Trim();
         staff.Username = username;
         staff.Email = email;
         staff.Role = normalizedRole;
         staff.MemberType = ResolveMemberType(normalizedRole, input.MemberType);
+        staff.Photo = string.IsNullOrWhiteSpace(input.Photo) ? null : input.Photo.Trim();
 
         if (!string.IsNullOrWhiteSpace(input.Status))
         {

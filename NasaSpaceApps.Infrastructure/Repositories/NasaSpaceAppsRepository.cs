@@ -50,11 +50,23 @@ public sealed class NasaSpaceAppsRepository : INasaSpaceAppsRepository
             .ToListAsync();
     }
 
+    public async Task UpdateTeamAsync(Team team)
+    {
+        _context.Teams.Update(team);
+        await _context.SaveChangesAsync();
+    }
+
     public async Task<List<Challenge>> GetChallengesAsync()
     {
         return await _context.Challenges
             .OrderBy(challenge => challenge.Title)
             .ToListAsync();
+    }
+
+    public async Task UpdateChallengeAsync(Challenge challenge)
+    {
+        _context.Challenges.Update(challenge);
+        await _context.SaveChangesAsync();
     }
 
     public async Task<Challenge?> GetChallengeByIdAsync(int challengeId)
@@ -415,6 +427,48 @@ public sealed class NasaSpaceAppsRepository : INasaSpaceAppsRepository
     public async Task UpdateQuestionAsync(Question question)
     {
         _context.Questions.Update(question);
+        await _context.SaveChangesAsync();
+    }
+
+    // ---- Season media (landing page) ----
+
+    public async Task<List<SeasonMedia>> GetSeasonMediaAsync(bool activeOnly = true)
+    {
+        var query = _context.SeasonMedia.AsQueryable();
+
+        if (activeOnly)
+        {
+            query = query.Where(media => media.Active);
+        }
+
+        return await query
+            .OrderBy(media => media.DisplayOrder ?? int.MaxValue)
+            .ThenBy(media => media.MediaId)
+            .ToListAsync();
+    }
+
+    public async Task<SeasonMedia?> GetSeasonMediaByIdAsync(int mediaId)
+    {
+        return await _context.SeasonMedia
+            .FirstOrDefaultAsync(media => media.MediaId == mediaId);
+    }
+
+    public async Task<SeasonMedia> AddSeasonMediaAsync(SeasonMedia media)
+    {
+        _context.SeasonMedia.Add(media);
+        await _context.SaveChangesAsync();
+        return media;
+    }
+
+    public async Task UpdateSeasonMediaAsync(SeasonMedia media)
+    {
+        _context.SeasonMedia.Update(media);
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task DeleteSeasonMediaAsync(SeasonMedia media)
+    {
+        _context.SeasonMedia.Remove(media);
         await _context.SaveChangesAsync();
     }
 

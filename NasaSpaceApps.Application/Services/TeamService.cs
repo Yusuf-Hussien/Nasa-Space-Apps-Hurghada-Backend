@@ -1,4 +1,4 @@
-﻿using NasaSpaceApps.Application.Common;
+using NasaSpaceApps.Application.Common;
 using NasaSpaceApps.Application.Models;
 using NasaSpaceApps.Application.Interfaces;
 using NasaSpaceApps.Domain.Entities;
@@ -35,5 +35,25 @@ public sealed class TeamService
     {
         var students = await _repository.GetStudentsByTeamIdAsync(teamId);
         return Result<List<Student>>.Success(students);
+    }
+
+    /// <summary>Set or clear a team's logo (base64 image or URL, max 20 MB decoded).</summary>
+    public async Task<Result<Team>> SetLogoAsync(int teamId, string? logo)
+    {
+        var team = await _repository.GetTeamByIdAsync(teamId);
+        if (team is null)
+        {
+            return Result<Team>.Failure("team.not_found", 404, "Team was not found.");
+        }
+
+        var logoError = ImageValidator.Validate(logo, "logo");
+        if (logoError is not null)
+        {
+            return Result<Team>.Failure(logoError.Code, 400, logoError.Message);
+        }
+
+        team.Logo = string.IsNullOrWhiteSpace(logo) ? null : logo.Trim();
+        await _repository.UpdateTeamAsync(team);
+        return Result<Team>.Success(team);
     }
 }

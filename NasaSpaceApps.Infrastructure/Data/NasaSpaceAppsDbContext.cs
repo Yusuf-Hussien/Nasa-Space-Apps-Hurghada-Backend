@@ -23,6 +23,7 @@ public class NasaSpaceAppsDbContext : DbContext
     public DbSet<SponsorTier> SponsorTiers => Set<SponsorTier>();
     public DbSet<Sponsor> Sponsors => Set<Sponsor>();
     public DbSet<Staff> Staff => Set<Staff>();
+    public DbSet<SeasonMedia> SeasonMedia => Set<SeasonMedia>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -40,6 +41,7 @@ public class NasaSpaceAppsDbContext : DbContext
         modelBuilder.Entity<SponsorTier>().HasKey(tier => tier.TierId);
         modelBuilder.Entity<Sponsor>().HasKey(sponsor => sponsor.SponsorId);
         modelBuilder.Entity<Staff>().HasKey(staff => staff.StaffId);
+        modelBuilder.Entity<SeasonMedia>().HasKey(media => media.MediaId);
 
         modelBuilder.Entity<Team>()
             .HasIndex(team => team.Username)

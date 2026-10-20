@@ -38,6 +38,12 @@ public sealed class SponsorService
             return Result<Sponsor>.Failure("sponsor.invalid", 400, "Name is required.");
         }
 
+        var logoError = ImageValidator.Validate(input.Logo, "logo");
+        if (logoError is not null)
+        {
+            return Result<Sponsor>.Failure(logoError.Code, 400, logoError.Message);
+        }
+
         var tier = await _repository.GetSponsorTierByIdAsync(input.TierId);
         if (tier is null)
         {
@@ -69,6 +75,12 @@ public sealed class SponsorService
         if (string.IsNullOrWhiteSpace(input.Name))
         {
             return Result<Sponsor>.Failure("sponsor.invalid", 400, "Name is required.");
+        }
+
+        var logoError = ImageValidator.Validate(input.Logo, "logo");
+        if (logoError is not null)
+        {
+            return Result<Sponsor>.Failure(logoError.Code, 400, logoError.Message);
         }
 
         var tier = await _repository.GetSponsorTierByIdAsync(input.TierId);

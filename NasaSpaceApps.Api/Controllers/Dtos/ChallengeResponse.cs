@@ -8,8 +8,9 @@ public sealed record ChallengeResponse(
     string Title,
     string? Description,
     string? Source,
-    string? Season)
+    string? Season,
+    string? Image)
 {
     public static ChallengeResponse From(Challenge challenge) =>
-        new(challenge.ChallengeId, challenge.Title, challenge.Description, challenge.Source, challenge.Season);
+        new(challenge.ChallengeId, challenge.Title, challenge.Description, challenge.Source, challenge.Season, challenge.Image);
 }

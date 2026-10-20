@@ -1,4 +1,6 @@
-﻿namespace NasaSpaceApps.Application.Models;
+﻿using NasaSpaceApps.Domain.Entities;
+
+namespace NasaSpaceApps.Application.Models;
 
 public sealed record LoginResponse(
     string AccessToken,
@@ -8,4 +10,6 @@ public sealed record LoginResponse(
     string? Username = null,
     string? Email = null,
     int? StaffId = null,
-    int? JudgeId = null);
+    int? JudgeId = null,
+    Team? Team = null,
+    IReadOnlyCollection<Student>? TeamStudents = null);

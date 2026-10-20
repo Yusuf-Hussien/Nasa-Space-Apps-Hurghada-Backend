@@ -96,6 +96,28 @@ public static class DbInitializer
         context.SponsorTiers.Add(tier);
         context.Sponsors.Add(new Sponsor { Name = "NASA Partner", Tier = tier, Active = true, DisplayOrder = 1, Logo = "https://example.com/logo.png", Link = "https://example.com" });
 
+        context.SeasonMedia.AddRange(
+            new SeasonMedia
+            {
+                Season = "2025",
+                Title = "Global Hackathon Highlights",
+                Description = "Footage from the 2025 season.",
+                Link = "https://example.com/2025-highlights",
+                MediaType = "video",
+                DisplayOrder = 1,
+                Active = true
+            },
+            new SeasonMedia
+            {
+                Season = "2024",
+                Title = "Hurghada Local Event",
+                Description = "Photos from the 2024 local event.",
+                Link = "https://example.com/2024-gallery",
+                MediaType = "image",
+                DisplayOrder = 2,
+                Active = true
+            });
+
         var admin = new Staff
         {
             FullName = "Event Admin",
@@ -208,26 +230,42 @@ public static class DbInitializer
     private const string SqlSchemaScript = @"
 -- ============ Challenges ============
 IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Challenges')
-CREATE TABLE [Challenges] (
-    [ChallengeId] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
-    [Title] NVARCHAR(200) NOT NULL,
-    [Description] NVARCHAR(MAX) NULL,
-    [Source] NVARCHAR(200) NULL,
-    [Season] NVARCHAR(50) NULL,
-    [Metadata] NVARCHAR(MAX) NULL
-);
+BEGIN
+    CREATE TABLE [Challenges] (
+        [ChallengeId] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        [Title] NVARCHAR(200) NOT NULL,
+        [Description] NVARCHAR(MAX) NULL,
+        [Source] NVARCHAR(200) NULL,
+        [Season] NVARCHAR(50) NULL,
+        [Metadata] NVARCHAR(MAX) NULL,
+        [Image] NVARCHAR(MAX) NULL
+    );
+END
+ELSE
+BEGIN
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Challenges') AND name = 'Image')
+        ALTER TABLE [Challenges] ADD [Image] NVARCHAR(MAX) NULL;
+END
 
 -- ============ Teams ============
 IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Teams')
-CREATE TABLE [Teams] (
-    [TeamId] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
-    [Name] NVARCHAR(200) NOT NULL,
-    [Username] NVARCHAR(100) NOT NULL,
-    [PasswordHash] NVARCHAR(500) NOT NULL,
-    [ChallengeId] INT NOT NULL,
-    [Status] NVARCHAR(50) NOT NULL DEFAULT 'Active',
-    CONSTRAINT [FK_Teams_Challenges] FOREIGN KEY ([ChallengeId]) REFERENCES [Challenges]([ChallengeId]) ON DELETE CASCADE
-);
+BEGIN
+    CREATE TABLE [Teams] (
+        [TeamId] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        [Name] NVARCHAR(200) NOT NULL,
+        [Username] NVARCHAR(100) NOT NULL,
+        [PasswordHash] NVARCHAR(500) NOT NULL,
+        [ChallengeId] INT NOT NULL,
+        [Logo] NVARCHAR(MAX) NULL,
+        [Status] NVARCHAR(50) NOT NULL DEFAULT 'Active',
+        CONSTRAINT [FK_Teams_Challenges] FOREIGN KEY ([ChallengeId]) REFERENCES [Challenges]([ChallengeId]) ON DELETE CASCADE
+    );
+END
+ELSE
+BEGIN
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Teams') AND name = 'Logo')
+        ALTER TABLE [Teams] ADD [Logo] NVARCHAR(MAX) NULL;
+END
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Teams_Username' AND object_id = OBJECT_ID('Teams'))
 CREATE UNIQUE INDEX [IX_Teams_Username] ON [Teams]([Username]);
 
@@ -253,6 +291,7 @@ BEGIN
         [MemberType] NVARCHAR(50) NULL,
         [Status] NVARCHAR(50) NOT NULL DEFAULT 'Active',
         [JudgeId] INT NULL,
+        [Photo] NVARCHAR(MAX) NULL,
         [CreatedAt] DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
         CONSTRAINT [FK_Staff_Judges] FOREIGN KEY ([JudgeId]) REFERENCES [Judges]([JudgeId]) ON DELETE SET NULL
     );
@@ -263,6 +302,8 @@ ELSE
 BEGIN
     IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Staff') AND name = 'MemberType')
         ALTER TABLE [Staff] ADD [MemberType] NVARCHAR(50) NULL;
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Staff') AND name = 'Photo')
+        ALTER TABLE [Staff] ADD [Photo] NVARCHAR(MAX) NULL;
 END
 
 -- ============ Students ============
@@ -410,12 +451,28 @@ IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Sponsors')
 CREATE TABLE [Sponsors] (
     [SponsorId] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
     [Name] NVARCHAR(200) NOT NULL,
-    [Logo] NVARCHAR(500) NULL,
+    [Logo] NVARCHAR(MAX) NULL,
     [Link] NVARCHAR(500) NULL,
     [TierId] INT NOT NULL,
     [Active] BIT NOT NULL DEFAULT 0,
     [DisplayOrder] INT NULL,
     CONSTRAINT [FK_Sponsors_Tiers] FOREIGN KEY ([TierId]) REFERENCES [SponsorTiers]([TierId]) ON DELETE CASCADE
+);
+IF EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Sponsors') AND name = 'Logo' AND max_length <> -1)
+    ALTER TABLE [Sponsors] ALTER COLUMN [Logo] NVARCHAR(MAX) NULL;
+
+-- ============ SeasonMedia ============
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'SeasonMedia')
+CREATE TABLE [SeasonMedia] (
+    [MediaId] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    [Season] NVARCHAR(50) NOT NULL,
+    [Title] NVARCHAR(200) NOT NULL,
+    [Description] NVARCHAR(MAX) NULL,
+    [Image] NVARCHAR(MAX) NULL,
+    [Link] NVARCHAR(500) NULL,
+    [MediaType] NVARCHAR(50) NULL,
+    [DisplayOrder] INT NULL,
+    [Active] BIT NOT NULL DEFAULT 1
 );
 ";
 }

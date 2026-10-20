@@ -7,4 +7,5 @@ public sealed record StaffInput(
     string Email,
     string? Password,
     string Role,
-    string? MemberType = null);
+    string? MemberType = null,
+    string? Photo = null);
