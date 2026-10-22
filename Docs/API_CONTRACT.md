@@ -140,10 +140,13 @@ Full catalogue of codes (HTTP status in parentheses):
 | `game.not_participant` (403) | Answer submitted without a team identity. |
 | `answer.empty` (400) | Blank answer. |
 | `answer.already_submitted` (409) | Team already answered that question. |
-| `judging.no_scores` (400) | `scores` list empty. |
-| `criterion.not_found` (404) | Score references an unknown criterion. |
-| `score.invalid` (400) | Score out of `[0, criterion.maxScore]`. |
+| `judging.no_scores` (400) | `scores` list empty, or no scores exist to publish for that judge/criterion. |
+| `criterion.not_found` (404) | Criterion (or scored criterion) does not exist. |
+| `criterion.invalid` (400) | Criterion name missing or max score not positive. |
+| `criterion_question.not_found` (404) | Scored question does not belong to the given criterion. |
+| `score.invalid` (400) | Score out of `[0, maxScore]`, or max score not positive. |
 | `judging.no_judge_link` (403) | Judge token has no linked judge profile. |
+| `judging.not_allowed` (403) | Only a judge or an admin may publish criterion scores. |
 | `season_media.not_found` (404) | Season-media id does not exist. |
 | `season_media.invalid` (400) | Season or title missing. |
 | `image.invalid_type` (400) | Data-URI MIME type not in the allowed image list. |
@@ -187,12 +190,12 @@ Free-form string (no server-side whitelist). Suggested UI values:
 | --- | --- | --- | --- | --- | --- | --- |
 | Auth | login routes | `me` | - | - | - | - |
 | Challenges | list, get | - | set image | - | - | - |
-| Teams | list | - | - | detail, students (Staff); set logo (Admin) | - | - |
+| Teams | list, detail | - | set logo | students (Staff) | - | - |
 | Attendance | - | list (Staff) | - | teams, bulk mark | - | - |
 | Requests | - | list/create/delete | - | resolve (Staff) | - | - |
 | Sponsors | list, tiers, get | - | create/update/delete | - | - | - |
 | Questions | - | list, get | create/update/publish/delete | - | - | - |
-| Judging | standings | criteria | - | - | submit scores | - |
+| Judging | criteria, standings | - | criteria CRUD | scores (Staff) | submit scores, publish/unpublish own scores | - |
 | Game | leaderboard | - | - | - | - | submit answer |
 | Season media | list, get | - | create/update/delete | - | - | - |
 | Staff | - | - | all | - | - | - |
@@ -283,10 +286,27 @@ staff callers**; non-staff receive `"username": null`. `logo` is public.
 { "teamId": 1, "name": "Orion", "username": "orion", "logo": null, "status": "Active" }
 ```
 
-### 7.2 `GET /teams/{teamId}` - `StaffOnly`
-`200` → `TeamDetailResponse` (includes `username`):
+### 7.2 `GET /teams/{teamId}` - Public
+`200` → `TeamDetailResponse`: the team plus its full `challenge`, its `project`
+(title/description/repository/demo links), and its `students` as **names only**
+(no email/contact). `username` is populated **only for staff callers** (public →
+`null`). Member management (`GET /teams/{teamId}/students`) stays `StaffOnly`.
 ```json
-{ "teamId": 1, "name": "Orion", "username": "orion", "logo": null, "status": "Active", "challengeId": 1 }
+{
+  "teamId": 1, "name": "Orion", "username": null, "logo": null, "status": "Active",
+  "challengeId": 1,
+  "challenge": {
+    "challengeId": 1, "title": "Climate Watch", "description": "...",
+    "source": "NASA", "season": "2026", "image": null
+  },
+  "project": {
+    "title": "Orbit", "description": "A satellite tracker.",
+    "repositoryLink": "https://github.com/...", "demoLink": "https://..."
+  },
+  "students": [
+    { "studentId": 1, "name": "Aisha Ali", "status": "Active" }
+  ]
+}
 ```
 Errors: `team.not_found`.
 
@@ -506,54 +526,120 @@ Soft delete: sets `isActive:false`, `isPublished:false`. `200` →
 
 ## 12. Judging
 
-`JudgingController` is class-level `[Authorize]`.
+Judging is **article-based**: each challenge has judging **criteria**, and each
+criterion has a list of **article/reference questions** (plain prompts the judge
+reads — no answers, no auto-grading). Judges score each question per team.
 
-### 12.1 `GET /judging/criteria` - Any authenticated
+Each judge can submit and **publish their own** scores for a criterion
+independently. The live board averages the scores of every judge who has
+published that criterion. Only published-by-judge scores count; unpublished
+judges' scores are hidden until they publish. Re-submitting scores replaces the
+previous scores for the same judge, team, and question. See
+[`JUDGING_PROCESS.md`](JUDGING_PROCESS.md) for a non-technical walkthrough.
+
+### 12.1 `GET /judging/criteria?challengeId=` - Public
 `200` → array of:
 ```json
-{ "criterionId": 1, "name": "Innovation", "description": "Novelty and creativity.", "maxScore": 10, "weight": 30 }
-```
-> Note: requires a token (not public), unlike `/judging/standings`.
-
-### 12.2 `GET /judging/standings` - Public
-The single source of truth for the scoreboard (ranked, tie-aware). `200` →
-array of:
-```json
 {
-  "rank": 1, "isTied": false, "teamId": 1, "teamName": "Orion", "totalScore": 18.0,
-  "scores": [
-    { "criterionId": 1, "criterionName": "Innovation", "score": 9.5, "judgeId": 1 },
-    { "criterionId": 2, "criterionName": "Technical Execution", "score": 8.5, "judgeId": 1 }
+  "criterionId": 1, "challengeId": 1, "name": "Team Work",
+  "description": "How well the team collaborated and delivered together.", "maxScore": 10, "weight": 30,
+  "isPublished": true, "publishedAt": "2026-10-22T10:00:00Z",
+  "publishedJudgeCount": 1, "isPublishedByCaller": true,
+  "questions": [
+    { "criterionQuestionId": 1, "criterionId": 1, "text": "Did every team member contribute...", "displayOrder": 1, "isActive": true }
   ]
 }
 ```
-`rank` is `null` when the team has no scores yet.
+`publishedJudgeCount` is how many judges have published this criterion.
+`isPublishedByCaller` is `null` for anonymous callers and for non-judge authenticated callers.
 
-### 12.3 `POST /judging/scores` - `JudgeOnly`
-`judgeId` is taken from the token - **never** send it in the body. Body:
+### 12.2 `POST /judging/criteria` - `AdminOnly`
+```json
+{
+  "name": "Innovation", "description": "Novelty and creativity.",
+  "maxScore": 10, "weight": 30, "challengeId": 1,
+  "questions": [
+    { "text": "How original is the concept?", "displayOrder": 1 },
+    { "text": "Does the team explain the problem clearly?", "displayOrder": 2 }
+  ]
+}
+```
+`name` required; `maxScore > 0`; `challengeId` optional but must exist.
+`200` → created `JudgingCriterionResponse`. Errors: `criterion.invalid`,
+`challenge.not_found`.
+
+### 12.3 `PUT /judging/criteria/{criterionId}` - `AdminOnly`
+Same body/response. When `questions` is supplied it **replaces** the existing
+question list. Errors: `criterion.not_found`, `criterion.invalid`, `challenge.not_found`.
+
+### 12.4 `DELETE /judging/criteria/{criterionId}` - `AdminOnly`
+`200` → `{ "id": 1, "deleted": true }`. Deleting a criterion also removes its
+questions and scores. Errors: `criterion.not_found`.
+
+### 12.5 `POST /judging/criteria/{criterionId}/publish` - `JudgeOrAdminOnly`
+`POST .../unpublish` reverses it. `200` → updated `JudgingCriterionResponse`.
+
+- **Judge:** publishes (or withdraws) their **own** scores only.
+- **Admin:** may pass `?judgeId=N` to target a specific judge, or omit the
+  parameter to **force-publish every judge who has scored** the criterion.
+- Publishing is idempotent; scores only appear once their judge publishes.
+- Side effect: broadcasts `StandingsUpdated`. Errors: `criterion.not_found`,
+  `judging.not_allowed`, `judging.no_scores`.
+
+### 12.6 `GET /judging/standings` - Public
+The single source of truth for the live board. **Ranked by achieved percentage**
+(`achievedScore / availableScore * 100`). Only scores from **published-by-judge**
+entries are counted, and each criterion is **averaged across the judges who
+published it**. A skipped question is excluded for the judge who skipped it but
+still counts for others. Per-question detail is not exposed. `200` → array of:
+```json
+{
+  "rank": 1, "isTied": false, "teamId": 1, "teamName": "Orion",
+  "achievedScore": 8.5, "availableScore": 10.0, "percentage": 85.0,
+  "judgesCounted": 2,
+  "criteria": [
+    { "criterionId": 1, "criterionName": "Team Work", "achievedScore": 8.5, "availableScore": 10.0, "judgesCounted": 2 }
+  ]
+}
+```
+`rank` is `null` when the team has no published, scored criteria yet.
+`judgesCounted` shows how many judges contributed (useful when coverage is uneven).
+
+### 12.7 `POST /judging/scores` - `JudgeOnly`
+`judgeId` comes from the token - **never** send it in the body. Body:
 ```json
 {
   "teamId": 1,
   "scores": [
-    { "criterionId": 1, "score": 9.5, "comment": "Strong concept" },
-    { "criterionId": 2, "score": 8.5, "comment": null }
+    { "criterionId": 1, "criterionQuestionId": 1, "name": null, "maxScore": 5, "score": 4, "comment": "Clear idea" },
+    { "criterionId": 1, "criterionQuestionId": null, "name": "Bonus: teamwork", "maxScore": 5, "score": 5 },
+    { "criterionId": 1, "criterionQuestionId": null, "name": "Off-topic ask", "maxScore": 5, "score": 0, "skipped": true }
   ]
 }
 ```
-Rules: team must exist; each `criterionId` must exist; `0 ≤ score ≤ criterion.maxScore`.
-`200` → array of `JudgeScoreResponse` with `judgeId` omitted (`null`):
-```json
-{ "scoreId": 1, "teamId": 1, "judgeId": null, "criterionId": 1,
-  "criterionName": "Innovation", "score": 9.5, "comment": "Strong concept",
-  "timestamp": "2026-10-04T09:30:00Z" }
-```
-Side effects: broadcasts `ScoresSubmitted` then `StandingsUpdated` on the
-Judging hub. Errors: in-code `403 judging.no_judge_link` (account not linked to a
-judge), `team.not_found`, `judging.no_scores`, `criterion.not_found`, `score.invalid`.
+Rules:
+- For a catalogue question, send `criterionQuestionId` (it must belong to
+  `criterionId`); `maxScore` defaults to the criterion's `maxScore`.
+- For an ad-hoc **"other"** question, leave `criterionQuestionId` null and give a
+  `name` (optional) and an explicit `maxScore`.
+- `skipped: true` excludes that entry from the team's result for this judge only
+  (it counts neither for nor against this judge).
+- Otherwise `0 ≤ score ≤ maxScore`.
+- **Upsert:** re-submitting the same judge, team, criterion, and question
+  replaces the existing score (no duplicates).
 
-### 12.4 `GET /judging/scores?teamId=` - `StaffOnly`
-`200` → array of `JudgeScoreResponse` (includes the real `judgeId` and
-`criterionName`). `teamId` is required.
+`200` → array of `QuestionScoreResponse`:
+```json
+{ "questionScoreId": 1, "teamId": 1, "criterionId": 1, "criterionQuestionId": 1,
+  "questionName": "How original is the concept?", "maxScore": 5, "score": 4,
+  "skipped": false, "comment": "Clear idea", "timestamp": "2026-10-04T09:30:00Z" }
+```
+Side effects: broadcasts `ScoresSubmitted` then `StandingsUpdated`. Errors:
+in-code `403 judging.no_judge_link`, `team.not_found`, `judging.no_scores`,
+`criterion.not_found`, `criterion_question.not_found`, `score.invalid`.
+
+### 12.8 `GET /judging/scores?teamId=` - `StaffOnly`
+`200` → array of `QuestionScoreResponse` (per-question detail). `teamId` required.
 
 ---
 
@@ -700,8 +786,8 @@ Events (server → client):
 | Requests | `RequestCreated` | a `ServiceRequestResponse` |
 | Requests | `RequestUpdated` | a `ServiceRequestResponse` |
 | Requests | `RequestDeleted` | the deleted `requestId` (number) |
-| Judging | `ScoresSubmitted` | `{ teamId, judgeId, scores: JudgeScoreResponse[] }` |
-| Judging | `StandingsUpdated` | full standings array (`StandingsEntryResponse[]`) |
+| Judging | `ScoresSubmitted` | `{ teamId, judgeId, scores: QuestionScoreResponse[] }` |
+| Judging | `StandingsUpdated` | full standings array (`StandingsEntryResponse[]`, averaged across published judges) |
 
 `RequestsHub` client calls:
 - `JoinOrganizers()` - staff only; adds the caller to the `Organizers` group.

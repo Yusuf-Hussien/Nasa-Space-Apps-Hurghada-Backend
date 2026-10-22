@@ -25,12 +25,16 @@ public class TeamsController : ControllerBase
             teams => teams.Select(t => TeamSummaryResponse.From(t, User.IsStaff())).ToList());
     }
 
-    [Authorize(Policy = "StaffOnly")]
+    /// <summary>
+    /// Public team detail: challenge, project, and roster (student names only).
+    /// Sensitive fields (username, contact details) are included only for staff callers.
+    /// </summary>
     [HttpGet("{teamId:int}")]
     public async Task<ActionResult<TeamDetailResponse>> GetTeam(int teamId)
     {
+        var isStaff = User.IsStaff();
         var result = await _teamService.GetTeamAsync(teamId);
-        return result.ToHttpResult(this, TeamDetailResponse.From);
+        return result.ToHttpResult(this, team => TeamDetailResponse.From(team, isStaff));
     }
 
     /// <summary>Team roster. Staff-only: contains student names and contact details.</summary>
@@ -47,7 +51,8 @@ public class TeamsController : ControllerBase
     [HttpPatch("{teamId:int}/logo")]
     public async Task<ActionResult<TeamDetailResponse>> SetTeamLogo(int teamId, [FromBody] ImageInput input)
     {
+        var isStaff = User.IsStaff();
         var result = await _teamService.SetLogoAsync(teamId, input.Image);
-        return result.ToHttpResult(this, TeamDetailResponse.From);
+        return result.ToHttpResult(this, team => TeamDetailResponse.From(team, isStaff));
     }
 }

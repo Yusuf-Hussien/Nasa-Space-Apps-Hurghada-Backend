@@ -126,6 +126,7 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("CoreTeamOnly", p => p.RequireRole(AppRoles.CoreTeam));
     options.AddPolicy("JudgeOnly", p => p.RequireRole(AppRoles.Judge));
     options.AddPolicy("StaffOnly", p => p.RequireRole(AppRoles.Admin, AppRoles.CoreTeam, AppRoles.Judge));
+    options.AddPolicy("JudgeOrAdminOnly", p => p.RequireRole(AppRoles.Judge, AppRoles.Admin));
     options.AddPolicy("ParticipantOnly", p => p.RequireRole(AppRoles.Participant));
 });
 

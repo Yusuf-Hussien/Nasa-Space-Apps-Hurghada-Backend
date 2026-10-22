@@ -48,21 +48,46 @@ GO
 
 CREATE TABLE [JudgingCriterion] (
   [CriterionId] int PRIMARY KEY IDENTITY(1, 1),
+  [ChallengeId] int NULL,
   [Name] varchar(150) NOT NULL,
   [Description] text,
   [MaxScore] decimal(10,2) NOT NULL,
-  [Weight] decimal(5,2)
+  [Weight] decimal(5,2),
+  [IsPublished] bit NOT NULL DEFAULT 0,
+  [PublishedAt] datetime2 NULL
 )
 GO
 
-CREATE TABLE [JudgeScore] (
-  [ScoreId] int PRIMARY KEY IDENTITY(1, 1),
-  [TeamId] int NOT NULL,
-  [JudgeId] int NOT NULL,
+CREATE TABLE [CriterionQuestion] (
+  [CriterionQuestionId] int PRIMARY KEY IDENTITY(1, 1),
   [CriterionId] int NOT NULL,
-  [Score] decimal(10,2) NOT NULL,
+  [Text] text NOT NULL,
+  [DisplayOrder] int NOT NULL DEFAULT 0,
+  [IsActive] bit NOT NULL DEFAULT 1
+)
+GO
+
+CREATE TABLE [QuestionScore] (
+  [QuestionScoreId] int PRIMARY KEY IDENTITY(1, 1),
+  [TeamId] int NOT NULL,
+  [CriterionId] int NOT NULL,
+  [CriterionQuestionId] int NULL,
+  [QuestionName] varchar(255) NULL,
+  [JudgeId] int NOT NULL,
+  [MaxScore] decimal(18,2) NOT NULL,
+  [Score] decimal(18,2) NOT NULL,
+  [Skipped] bit NOT NULL DEFAULT 0,
   [Comment] text,
-  [Timestamp] timestamp NOT NULL
+  [Timestamp] datetime2 NOT NULL
+)
+GO
+
+CREATE TABLE [CriterionPublication] (
+  [CriterionPublicationId] int PRIMARY KEY IDENTITY(1, 1),
+  [CriterionId] int NOT NULL,
+  [JudgeId] int NOT NULL,
+  [PublishedAt] datetime2 NOT NULL DEFAULT GETUTCDATE(),
+  CONSTRAINT [UC_CriterionPublication] UNIQUE ([CriterionId], [JudgeId])
 )
 GO
 
@@ -163,16 +188,30 @@ GO
 
 EXEC sp_addextendedproperty
 @name = N'Table_Description',
-@value = 'Configurable scoring criterion.',
+@value = 'Challenge-scoped scoring criterion, published to the board when judging finishes.',
 @level0type = N'Schema', @level0name = 'dbo',
 @level1type = N'Table',  @level1name = 'JudgingCriterion';
 GO
 
 EXEC sp_addextendedproperty
 @name = N'Table_Description',
-@value = 'Stores a traceable score given by a Judge to a Team for a specific JudgingCriterion.',
+@value = 'Article/reference prompt a judge reads for a criterion. No answers, no auto-grading.',
 @level0type = N'Schema', @level0name = 'dbo',
-@level1type = N'Table',  @level1name = 'JudgeScore';
+@level1type = N'Table',  @level1name = 'CriterionQuestion';
+GO
+
+EXEC sp_addextendedproperty
+@name = N'Table_Description',
+@value = 'Per-question score by a Judge for a Team. May be an ad-hoc "other" question or skipped.',
+@level0type = N'Schema', @level0name = 'dbo',
+@level1type = N'Table',  @level1name = 'QuestionScore';
+GO
+
+EXEC sp_addextendedproperty
+@name = N'Table_Description',
+@value = 'Per-judge publication state for a criterion; board averages all judges who published.',
+@level0type = N'Schema', @level0name = 'dbo',
+@level1type = N'Table',  @level1name = 'CriterionPublication';
 GO
 
 EXEC sp_addextendedproperty
@@ -226,13 +265,28 @@ GO
 ALTER TABLE [Project] ADD FOREIGN KEY ([TeamId]) REFERENCES [Team] ([TeamId])
 GO
 
-ALTER TABLE [JudgeScore] ADD FOREIGN KEY ([TeamId]) REFERENCES [Team] ([TeamId])
+ALTER TABLE [JudgingCriterion] ADD FOREIGN KEY ([ChallengeId]) REFERENCES [Challenge] ([ChallengeId])
 GO
 
-ALTER TABLE [JudgeScore] ADD FOREIGN KEY ([JudgeId]) REFERENCES [Judge] ([JudgeId])
+ALTER TABLE [CriterionQuestion] ADD FOREIGN KEY ([CriterionId]) REFERENCES [JudgingCriterion] ([CriterionId])
 GO
 
-ALTER TABLE [JudgeScore] ADD FOREIGN KEY ([CriterionId]) REFERENCES [JudgingCriterion] ([CriterionId])
+ALTER TABLE [QuestionScore] ADD FOREIGN KEY ([TeamId]) REFERENCES [Team] ([TeamId])
+GO
+
+ALTER TABLE [QuestionScore] ADD FOREIGN KEY ([JudgeId]) REFERENCES [Judge] ([JudgeId])
+GO
+
+ALTER TABLE [QuestionScore] ADD FOREIGN KEY ([CriterionId]) REFERENCES [JudgingCriterion] ([CriterionId])
+GO
+
+ALTER TABLE [QuestionScore] ADD FOREIGN KEY ([CriterionQuestionId]) REFERENCES [CriterionQuestion] ([CriterionQuestionId])
+GO
+
+ALTER TABLE [CriterionPublication] ADD FOREIGN KEY ([CriterionId]) REFERENCES [JudgingCriterion] ([CriterionId])
+GO
+
+ALTER TABLE [CriterionPublication] ADD FOREIGN KEY ([JudgeId]) REFERENCES [Judge] ([JudgeId])
 GO
 
 ALTER TABLE [Attendance] ADD FOREIGN KEY ([StudentId]) REFERENCES [Student] ([StudentId])

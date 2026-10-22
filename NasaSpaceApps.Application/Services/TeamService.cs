@@ -20,9 +20,10 @@ public sealed class TeamService
         return Result<List<Team>>.Success(teams);
     }
 
+    /// <summary>Full team view: challenge, project, and roster (for the public detail endpoint).</summary>
     public async Task<Result<Team>> GetTeamAsync(int teamId)
     {
-        var team = await _repository.GetTeamByIdAsync(teamId);
+        var team = await _repository.GetTeamDetailAsync(teamId);
         if (team is null)
         {
             return Result<Team>.Failure("team.not_found", 404, "Team was not found.");

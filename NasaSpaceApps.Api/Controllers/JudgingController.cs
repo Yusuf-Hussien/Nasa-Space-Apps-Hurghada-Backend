@@ -4,13 +4,13 @@ using Microsoft.AspNetCore.SignalR;
 using NasaSpaceApps.Api.Common;
 using NasaSpaceApps.Api.Hubs;
 using NasaSpaceApps.Application.Common;
+using NasaSpaceApps.Application.Models;
 using NasaSpaceApps.Application.Services;
 
 namespace NasaSpaceApps.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/[controller]")]
-[Authorize]
 public class JudgingController : ControllerBase
 {
     private readonly JudgingService _judgingService;
@@ -27,14 +27,83 @@ public class JudgingController : ControllerBase
         _hubContext = hubContext;
     }
 
+    /// <summary>List judging criteria (with their article/reference questions), optionally by challenge.</summary>
+    [AllowAnonymous]
     [HttpGet("criteria")]
-    public async Task<ActionResult<List<JudgingCriterionResponse>>> GetCriteria()
+    public async Task<ActionResult<List<JudgingCriterionResponse>>> GetCriteria([FromQuery] int? challengeId = null)
     {
-        var result = await _judgingService.GetCriteriaAsync();
-        return result.ToHttpResult(this, items => items.Select(JudgingCriterionResponse.From).ToList());
+        var criteriaResult = await _judgingService.GetCriteriaAsync(challengeId);
+        if (!criteriaResult.IsSuccess)
+        {
+            return criteriaResult.ToHttpResult(this, items => items.Select(JudgingCriterionResponse.From).ToList());
+        }
+
+        var publicationsResult = await _judgingService.GetPublicationsAsync();
+        var publications = publicationsResult.IsSuccess ? publicationsResult.Value! : new List<Domain.Entities.CriterionPublication>();
+        return criteriaResult.ToHttpResult(this, items => items
+            .Select(criterion => JudgingCriterionResponse.From(criterion, publications, _currentUser.JudgeId))
+            .ToList());
     }
 
-    /// <summary>Public scoreboard. Single source of truth for standings.</summary>
+    [Authorize(Policy = "AdminOnly")]
+    [HttpPost("criteria")]
+    public async Task<ActionResult<JudgingCriterionResponse>> CreateCriterion([FromBody] JudgingCriterionInput input)
+    {
+        var result = await _judgingService.CreateCriterionAsync(input);
+        return result.ToHttpResult(this, JudgingCriterionResponse.From);
+    }
+
+    [Authorize(Policy = "AdminOnly")]
+    [HttpPut("criteria/{criterionId:int}")]
+    public async Task<ActionResult<JudgingCriterionResponse>> UpdateCriterion(int criterionId, [FromBody] JudgingCriterionInput input)
+    {
+        var result = await _judgingService.UpdateCriterionAsync(criterionId, input);
+        return result.ToHttpResult(this, JudgingCriterionResponse.From);
+    }
+
+    [Authorize(Policy = "AdminOnly")]
+    [HttpDelete("criteria/{criterionId:int}")]
+    public async Task<ActionResult<DeletedResponse>> DeleteCriterion(int criterionId)
+    {
+        var result = await _judgingService.DeleteCriterionAsync(criterionId);
+        return result.ToHttpResult(this, _ => DeletedResponse.Of(criterionId));
+    }
+
+    /// <summary>
+    /// Publish this judge's scores for the criterion so they appear on the live scoreboard.
+    /// An Admin may pass ?judgeId=N to publish a specific judge, or omit it to
+    /// force-publish every judge who has scores for the criterion.
+    /// </summary>
+    [Authorize(Policy = "JudgeOrAdminOnly")]
+    [HttpPost("criteria/{criterionId:int}/publish")]
+    public async Task<ActionResult<JudgingCriterionResponse>> PublishCriterion(int criterionId, [FromQuery] int? judgeId = null)
+    {
+        var result = await _judgingService.PublishCriterionAsync(criterionId, publish: true, _currentUser.Role, _currentUser.JudgeId, judgeId);
+        var httpResult = result.ToHttpResult(this, criterion => JudgingCriterionResponse.From(criterion));
+        if (result.IsSuccess)
+        {
+            await BroadcastStandingsAsync();
+        }
+
+        return httpResult;
+    }
+
+    /// <summary>Withdraw this judge's published scores for the criterion.</summary>
+    [Authorize(Policy = "JudgeOrAdminOnly")]
+    [HttpPost("criteria/{criterionId:int}/unpublish")]
+    public async Task<ActionResult<JudgingCriterionResponse>> UnpublishCriterion(int criterionId, [FromQuery] int? judgeId = null)
+    {
+        var result = await _judgingService.PublishCriterionAsync(criterionId, publish: false, _currentUser.Role, _currentUser.JudgeId, judgeId);
+        var httpResult = result.ToHttpResult(this, criterion => JudgingCriterionResponse.From(criterion));
+        if (result.IsSuccess)
+        {
+            await BroadcastStandingsAsync();
+        }
+
+        return httpResult;
+    }
+
+    /// <summary>Public live scoreboard. Ranked by achieved percentage; criteria averaged across judges who published them.</summary>
     [AllowAnonymous]
     [HttpGet("standings")]
     public async Task<ActionResult<List<StandingsEntryResponse>>> GetStandings()
@@ -44,12 +113,14 @@ public class JudgingController : ControllerBase
     }
 
     /// <summary>
-    /// Submit scores. The judgeId is taken from the authenticated judge's token,
-    /// it is NOT accepted from the request body. Broadcasts the updated standings to everyone via SignalR.
+    /// Submit per-question scores for a team. The judgeId comes from the token,
+    /// never the body. Ad-hoc questions are allowed when criterionQuestionId is null.
+    /// Re-submitting the same judge+team+question replaces the previous score.
+    /// Broadcasts updated standings via SignalR.
     /// </summary>
     [Authorize(Policy = "JudgeOnly")]
     [HttpPost("scores")]
-    public async Task<ActionResult<List<JudgeScoreResponse>>> SubmitScores([FromBody] SubmitScoresRequest request)
+    public async Task<ActionResult<List<QuestionScoreResponse>>> SubmitScores([FromBody] SubmitScoresRequest request)
     {
         var judgeId = _currentUser.JudgeId;
         if (!judgeId.HasValue)
@@ -57,10 +128,9 @@ public class JudgingController : ControllerBase
             return StatusCode(403, new { error = new { code = "judging.no_judge_link", message = "Your account is not linked to a judge profile." } });
         }
 
-        var scores = request.Scores.Select(item => (item.CriterionId, item.Score, item.Comment)).ToList();
-        var result = await _judgingService.SubmitScoresAsync(request.TeamId, judgeId.Value, scores);
+        var result = await _judgingService.SubmitScoresAsync(request.TeamId, judgeId.Value, request.Scores);
         var submitted = result.IsSuccess
-            ? result.Value!.Select(score => JudgeScoreResponse.From(score, includeJudge: false)).ToList()
+            ? result.Value!.Select(QuestionScoreResponse.From).ToList()
             : null;
 
         var httpResult = result.ToHttpResult(this, _ => submitted!);
@@ -79,10 +149,10 @@ public class JudgingController : ControllerBase
 
     [Authorize(Policy = "StaffOnly")]
     [HttpGet("scores")]
-    public async Task<ActionResult<List<JudgeScoreResponse>>> GetScores([FromQuery] int teamId)
+    public async Task<ActionResult<List<QuestionScoreResponse>>> GetScores([FromQuery] int teamId)
     {
         var result = await _judgingService.GetScoresForTeamAsync(teamId);
-        return result.ToHttpResult(this, scores => scores.Select(s => JudgeScoreResponse.From(s)).ToList());
+        return result.ToHttpResult(this, scores => scores.Select(QuestionScoreResponse.From).ToList());
     }
 
     private async Task BroadcastStandingsAsync()

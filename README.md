@@ -192,7 +192,7 @@ frontend and mobile teams lives in [`Docs/API_CONTRACT.md`](Docs/API_CONTRACT.md
 | `POST` | `/auth/login/participant` | Participant login (`username` + `password`) and receive a JWT plus team/challenge details |
 | `GET` | `/auth/me` | Current authenticated account |
 | `GET` | `/teams` | Search or list teams |
-| `GET` | `/teams/{teamId}` | Get one team |
+| `GET` | `/teams/{teamId}` | Get one team (public; includes challenge, project, student names) |
 | `GET` | `/teams/{teamId}/students` | Get team members |
 | `PATCH` | `/teams/{teamId}/logo` | Set team logo (Admin, base64 ≤ 20 MB) |
 | `GET` | `/challenges` | List challenges |
@@ -202,9 +202,13 @@ frontend and mobile teams lives in [`Docs/API_CONTRACT.md`](Docs/API_CONTRACT.md
 | `POST` | `/attendance` | Record attendance |
 | `GET` | `/requests` | Filter service requests |
 | `POST` | `/requests` | Create a service request |
-| `GET` | `/judging/criteria` | List judging criteria |
-| `GET` | `/judging/standings` | Public scoreboard |
-| `POST` | `/judging/scores` | Submit judge scores |
+| `GET` | `/judging/criteria` | List judging criteria + article questions (filter by `challengeId`) |
+| `POST` | `/judging/criteria` | Create a criterion (Admin) |
+| `POST` | `/judging/criteria/{id}/publish` | Publish own scores (Judge) or force-publish (Admin) |
+| `POST` | `/judging/criteria/{id}/unpublish` | Withdraw published scores (Judge/Admin) |
+| `GET` | `/judging/standings` | Public scoreboard (averaged across published judges) |
+| `POST` | `/judging/scores` | Submit per-question judge scores (upsert) |
+| `GET` | `/judging/scores?teamId=` | Per-question score detail (Staff) |
 | `GET` | `/sponsors` | List active sponsors |
 | `GET` | `/seasonmedia` | List season media (public) |
 | `POST` | `/seasonmedia` | Create season media (Admin, base64 ≤ 20 MB) |
@@ -226,7 +230,7 @@ Authorization is a policy check against the JWT `role` claim. Every request carr
 |---|---|
 | `Admin` | Full staff access, including staff management, sponsors, and questions |
 | `CoreTeam` | Organizers/mentors/developers/media; runs attendance and day-to-day operations |
-| `Judge` | Scores teams against the judging criteria |
+| `Judge` | Scores teams against the judging criteria's article questions; publishes their own scores to the board |
 | `Participant` | A team; submits answers and service requests for its own team only |
 
 `CoreTeam` members also carry a `memberType` (`Organizer`, `Mentor`, `Developer`, `Marketing`, `PR`, `Media`, `Highboard`). This is descriptive metadata only and does **not** grant distinct permissions.
@@ -249,10 +253,10 @@ Public (no token, or `[AllowAnonymous]`):
 
 - `POST /api/v1/auth/login/staff`, `POST /api/v1/auth/login/participant`
 - `GET /api/v1/challenges`, `GET /api/v1/challenges/{id}`
-- `GET /api/v1/teams` (the `username` field is hidden unless the caller is staff)
+- `GET /api/v1/teams`, `GET /api/v1/teams/{id}` (the `username` field is hidden unless the caller is staff)
 - `GET /api/v1/sponsors`, `/sponsors/{id}`, `/sponsors/tiers`, `/sponsors/tiers/{id}`
 - `GET /api/v1/seasonmedia`, `/seasonmedia/{id}`
-- `GET /api/v1/judging/standings`
+- `GET /api/v1/judging/criteria`, `GET /api/v1/judging/standings`
 - `GET /api/v1/game/leaderboard`
 - SignalR hub `/hubs/judging`
 
@@ -263,12 +267,10 @@ Any authenticated role:
 - `POST /api/v1/requests` (participants use their own team; staff may post for any team)
 - `DELETE /api/v1/requests/{id}` (participants are limited to their own team)
 - `GET /api/v1/questions`, `GET /api/v1/questions/{id}` (staff receive correct answers; participants see published questions with answers stripped)
-- `GET /api/v1/judging/criteria`
 - SignalR hub `/hubs/requests` (joining the `Organizers` group requires staff)
 
 `StaffOnly` — `Admin`, `CoreTeam`, `Judge`:
 
-- `GET /api/v1/teams/{id}`
 - `GET /api/v1/teams/{id}/students`
 - `PATCH /api/v1/requests/{id}` (resolve)
 - `GET /api/v1/judging/scores`
@@ -279,6 +281,7 @@ Any authenticated role:
 - All of `/api/v1/staff` (including `/staff/member-types`)
 - `POST`, `PUT`, `DELETE` on `/api/v1/sponsors` and `/api/v1/sponsors/tiers`
 - `POST`, `PUT`, `DELETE` on `/api/v1/questions`, plus `/questions/{id}/publish` and `/questions/{id}/unpublish`
+- `POST`, `PUT`, `DELETE` on `/api/v1/judging/criteria`
 - `PATCH /api/v1/teams/{id}/logo`, `PATCH /api/v1/challenges/{id}/image`
 - `POST`, `PUT`, `DELETE` on `/api/v1/seasonmedia`
 
@@ -290,6 +293,10 @@ Any authenticated role:
 `JudgeOnly` — `Judge`:
 
 - `POST /api/v1/judging/scores` (the `judgeId` comes from the token, never the body)
+
+`JudgeOrAdminOnly`:
+
+- `POST /api/v1/judging/criteria/{id}/publish` and `.../unpublish` (judge publishes own; admin may force-publish or target a judge)
 
 `ParticipantOnly` — `Participant`:
 
@@ -307,8 +314,11 @@ Any authenticated role:
 | Resolve service requests | Yes | Yes | Yes | No |
 | Take attendance (check-in screen) | No | Yes | No | No |
 | List attendance records | Yes | Yes | Yes | No |
-| Submit judge scores | No | No | Yes | No |
+| Submit judge scores (per question) | No | No | Yes | No |
 | List judging criteria | Yes | Yes | Yes | Yes |
+| Manage judging criteria | Yes | No | No | No |
+| Publish / unpublish own scores | No | No | Yes | No |
+| Publish / unpublish any judge's scores (force) | Yes | No | No | No |
 | Submit a side-trophy answer | No | No | No | Yes |
 | Manage staff, sponsors, questions | Yes | No | No | No |
 
@@ -322,7 +332,8 @@ Any authenticated role:
 ### Notes and known gaps
 
 - `CoreTeam` members' `memberType` does not affect authorization.
-- `GET /api/v1/judging/criteria` requires authentication even though the standings are public.
+- `GET /api/v1/judging/criteria` and `GET /api/v1/judging/standings` are public; criterion CRUD and per-question score detail require a role. Judges publish their own scores; only Admins may force-publish or target another judge. Scores are averaged across published judges.
+- `GET /api/v1/teams/{id}` is public but hides the team `username` from non-staff callers.
 - `Admin` cannot access the attendance check-in screen (`/attendance/teams`, `POST /attendance`), which is restricted to `CoreTeam`.
 - `Judge` currently shares the full `StaffOnly` surface (requests, rosters, attendance) in addition to scoring.
 - Deactivating a staff member blocks new logins but does not revoke already-issued tokens; a token issued with `rememberMe` stays valid for up to 30 days.
@@ -334,8 +345,8 @@ On an empty database, startup creates sample records including:
 - Mars Habitat Challenge
 - Teams `orion` and `atlas`
 - Sample students and projects
-- A judge and judging criteria
-- Sample scores
+- A judge and three challenge-scoped judging criteria (Team Work, Challenge Relevance, Technologies Used) with article questions
+- Sample per-question scores published by the seeded judge
 - A sponsor and sponsor tier
 
 Change or remove these credentials before using a shared or production database.
@@ -357,6 +368,6 @@ The exact error code depends on the service operation.
 
 - Build output is excluded by `.gitignore`; do not commit `bin/` or `obj/`.
 - Connection strings and JWT secrets belong in user-secrets, environment variables, or a deployment secret manager.
-- The current repository uses `EnsureCreated()` for initial setup rather than migrations.
-- Some authorization policies, audit logging, real-time SignalR events, and broader validation described in the design documents remain future work.
-- The `Docs/` directory contains the ERD, PRD, design contract, implementation plan, and project decisions.
+- Schema is provisioned by idempotent SQL in `DbInitializer` (InMemory uses `EnsureCreated()`); do not call `EnsureCreated()`/`EnsureDeleted()` against SQL Server.
+- Some audit logging, real-time SignalR events, and broader validation described in the design documents remain future work.
+- The `Docs/` directory contains the ERD, PRD, design contract, implementation plan, project decisions, and the [judging process guide](Docs/JUDGING_PROCESS.md).

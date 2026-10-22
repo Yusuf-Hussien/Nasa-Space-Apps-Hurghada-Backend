@@ -15,6 +15,9 @@ public class NasaSpaceAppsDbContext : DbContext
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<Judge> Judges => Set<Judge>();
     public DbSet<JudgingCriterion> JudgingCriteria => Set<JudgingCriterion>();
+    public DbSet<CriterionQuestion> CriterionQuestions => Set<CriterionQuestion>();
+    public DbSet<QuestionScore> QuestionScores => Set<QuestionScore>();
+    public DbSet<CriterionPublication> CriterionPublications => Set<CriterionPublication>();
     public DbSet<JudgeScore> JudgeScores => Set<JudgeScore>();
     public DbSet<Attendance> Attendances => Set<Attendance>();
     public DbSet<ServiceRequest> ServiceRequests => Set<ServiceRequest>();
@@ -33,6 +36,8 @@ public class NasaSpaceAppsDbContext : DbContext
         modelBuilder.Entity<Project>().HasKey(project => project.ProjectId);
         modelBuilder.Entity<Judge>().HasKey(judge => judge.JudgeId);
         modelBuilder.Entity<JudgingCriterion>().HasKey(criterion => criterion.CriterionId);
+        modelBuilder.Entity<CriterionQuestion>().HasKey(question => question.CriterionQuestionId);
+        modelBuilder.Entity<QuestionScore>().HasKey(score => score.QuestionScoreId);
         modelBuilder.Entity<JudgeScore>().HasKey(score => score.ScoreId);
         modelBuilder.Entity<Attendance>().HasKey(attendance => attendance.AttendanceId);
         modelBuilder.Entity<ServiceRequest>().HasKey(request => request.RequestId);
@@ -93,12 +98,71 @@ public class NasaSpaceAppsDbContext : DbContext
             .Property(criterion => criterion.Weight)
             .HasPrecision(18, 2);
 
+        modelBuilder.Entity<QuestionScore>()
+            .Property(score => score.Score)
+            .HasPrecision(18, 2);
+
+        modelBuilder.Entity<QuestionScore>()
+            .Property(score => score.MaxScore)
+            .HasPrecision(18, 2);
+
+        modelBuilder.Entity<JudgingCriterion>()
+            .HasOne(criterion => criterion.Challenge)
+            .WithMany(challenge => challenge.Criteria)
+            .HasForeignKey(criterion => criterion.ChallengeId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<CriterionQuestion>()
+            .HasOne(question => question.Criterion)
+            .WithMany(criterion => criterion.Questions)
+            .HasForeignKey(question => question.CriterionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<QuestionScore>()
+            .HasOne(score => score.Team)
+            .WithMany()
+            .HasForeignKey(score => score.TeamId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<QuestionScore>()
+            .HasOne(score => score.Criterion)
+            .WithMany()
+            .HasForeignKey(score => score.CriterionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<QuestionScore>()
+            .HasOne(score => score.CriterionQuestion)
+            .WithMany()
+            .HasForeignKey(score => score.CriterionQuestionId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<QuestionScore>()
+            .HasOne(score => score.Judge)
+            .WithMany()
+            .HasForeignKey(score => score.JudgeId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<CriterionPublication>()
+            .HasOne(publication => publication.Criterion)
+            .WithMany(criterion => criterion.Publications)
+            .HasForeignKey(publication => publication.CriterionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<CriterionPublication>()
+            .HasOne(publication => publication.Judge)
+            .WithMany()
+            .HasForeignKey(publication => publication.JudgeId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<CriterionPublication>()
+            .HasIndex(publication => new { publication.CriterionId, publication.JudgeId })
+            .IsUnique();
+
         modelBuilder.Entity<JudgeScore>()
             .HasOne(score => score.Team)
             .WithMany(team => team.Scores)
             .HasForeignKey(score => score.TeamId)
             .OnDelete(DeleteBehavior.Cascade);
-
         modelBuilder.Entity<JudgeScore>()
             .HasOne(score => score.Judge)
             .WithMany(judge => judge.Scores)

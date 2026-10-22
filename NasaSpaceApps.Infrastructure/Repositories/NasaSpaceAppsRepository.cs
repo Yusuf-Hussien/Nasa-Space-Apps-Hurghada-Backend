@@ -31,6 +31,15 @@ public sealed class NasaSpaceAppsRepository : INasaSpaceAppsRepository
             .FirstOrDefaultAsync(team => team.TeamId == teamId);
     }
 
+    public async Task<Team?> GetTeamDetailAsync(int teamId)
+    {
+        return await _context.Teams
+            .Include(team => team.Challenge)
+            .Include(team => team.Project)
+            .Include(team => team.Students)
+            .FirstOrDefaultAsync(team => team.TeamId == teamId);
+    }
+
     public async Task<List<Team>> GetTeamsAsync(string? search = null)
     {
         var query = _context.Teams.AsQueryable();
@@ -216,17 +225,46 @@ public sealed class NasaSpaceAppsRepository : INasaSpaceAppsRepository
     public async Task<List<JudgeScore>> GetAllScoresAsync() =>
         await _context.JudgeScores.Include(score => score.Criterion).ToListAsync();
 
-    public async Task<List<JudgingCriterion>> GetJudgingCriteriaAsync()
+    public async Task<List<JudgingCriterion>> GetJudgingCriteriaAsync(int? challengeId = null)
     {
-        return await _context.JudgingCriteria
-            .OrderBy(criterion => criterion.Name)
+        var query = _context.JudgingCriteria
+            .Include(criterion => criterion.Questions)
+            .AsQueryable();
+
+        if (challengeId.HasValue)
+        {
+            query = query.Where(criterion => criterion.ChallengeId == challengeId.Value);
+        }
+
+        return await query
+            .OrderBy(criterion => criterion.CriterionId)
             .ToListAsync();
     }
 
     public async Task<JudgingCriterion?> GetJudgingCriterionByIdAsync(int criterionId)
     {
         return await _context.JudgingCriteria
+            .Include(criterion => criterion.Questions)
             .FirstOrDefaultAsync(criterion => criterion.CriterionId == criterionId);
+    }
+
+    public async Task<JudgingCriterion> AddJudgingCriterionAsync(JudgingCriterion criterion)
+    {
+        _context.JudgingCriteria.Add(criterion);
+        await _context.SaveChangesAsync();
+        return criterion;
+    }
+
+    public async Task UpdateJudgingCriterionAsync(JudgingCriterion criterion)
+    {
+        _context.JudgingCriteria.Update(criterion);
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task DeleteJudgingCriterionAsync(JudgingCriterion criterion)
+    {
+        _context.JudgingCriteria.Remove(criterion);
+        await _context.SaveChangesAsync();
     }
 
     public async Task AddJudgeScoreAsync(JudgeScore score)
@@ -234,6 +272,154 @@ public sealed class NasaSpaceAppsRepository : INasaSpaceAppsRepository
         _context.JudgeScores.Add(score);
         await _context.SaveChangesAsync();
     }
+
+    // ---- Criterion questions ----
+
+    public async Task<List<CriterionQuestion>> GetCriterionQuestionsAsync(int criterionId, bool activeOnly = true)
+    {
+        var query = _context.CriterionQuestions
+            .Where(question => question.CriterionId == criterionId);
+
+        if (activeOnly)
+        {
+            query = query.Where(question => question.IsActive);
+        }
+
+        return await query
+            .OrderBy(question => question.DisplayOrder)
+            .ThenBy(question => question.CriterionQuestionId)
+            .ToListAsync();
+    }
+
+    public async Task<CriterionQuestion?> GetCriterionQuestionByIdAsync(int criterionQuestionId) =>
+        await _context.CriterionQuestions
+            .FirstOrDefaultAsync(question => question.CriterionQuestionId == criterionQuestionId);
+
+    public async Task<CriterionQuestion> AddCriterionQuestionAsync(CriterionQuestion question)
+    {
+        _context.CriterionQuestions.Add(question);
+        await _context.SaveChangesAsync();
+        return question;
+    }
+
+    public async Task UpdateCriterionQuestionAsync(CriterionQuestion question)
+    {
+        _context.CriterionQuestions.Update(question);
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task DeleteCriterionQuestionAsync(CriterionQuestion question)
+    {
+        _context.CriterionQuestions.Remove(question);
+        await _context.SaveChangesAsync();
+    }
+
+    // ---- Question scores ----
+
+    public async Task<QuestionScore> AddQuestionScoreAsync(QuestionScore score)
+    {
+        _context.QuestionScores.Add(score);
+        await _context.SaveChangesAsync();
+        return score;
+    }
+
+    public async Task<List<QuestionScore>> GetQuestionScoresAsync(int? teamId = null, int? criterionId = null, int? judgeId = null)
+    {
+        var query = _context.QuestionScores
+            .Include(score => score.Criterion)
+            .Include(score => score.CriterionQuestion)
+            .AsQueryable();
+
+        if (teamId.HasValue)
+        {
+            query = query.Where(score => score.TeamId == teamId.Value);
+        }
+
+        if (criterionId.HasValue)
+        {
+            query = query.Where(score => score.CriterionId == criterionId.Value);
+        }
+
+        if (judgeId.HasValue)
+        {
+            query = query.Where(score => score.JudgeId == judgeId.Value);
+        }
+
+        return await query
+            .OrderBy(score => score.CriterionId)
+            .ThenBy(score => score.QuestionScoreId)
+            .ToListAsync();
+    }
+
+    public async Task<List<QuestionScore>> GetAllQuestionScoresAsync() =>
+        await _context.QuestionScores
+            .Include(score => score.Criterion)
+            .Include(score => score.CriterionQuestion)
+            .ToListAsync();
+
+    public async Task DeleteQuestionScoreAsync(QuestionScore score)
+    {
+        _context.QuestionScores.Remove(score);
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task UpdateQuestionScoreAsync(QuestionScore score)
+    {
+        _context.QuestionScores.Update(score);
+        await _context.SaveChangesAsync();
+    }
+
+    // ---- Criterion publications ----
+
+    public async Task<CriterionPublication> AddCriterionPublicationAsync(CriterionPublication publication)
+    {
+        _context.CriterionPublications.Add(publication);
+        await _context.SaveChangesAsync();
+        return publication;
+    }
+
+    public async Task<List<CriterionPublication>> GetCriterionPublicationsAsync(int? criterionId = null, int? judgeId = null)
+    {
+        var query = _context.CriterionPublications.AsQueryable();
+
+        if (criterionId.HasValue)
+        {
+            query = query.Where(publication => publication.CriterionId == criterionId.Value);
+        }
+
+        if (judgeId.HasValue)
+        {
+            query = query.Where(publication => publication.JudgeId == judgeId.Value);
+        }
+
+        return await query
+            .OrderBy(publication => publication.CriterionId)
+            .ThenBy(publication => publication.JudgeId)
+            .ToListAsync();
+    }
+
+    public async Task<CriterionPublication?> GetCriterionPublicationAsync(int criterionId, int judgeId) =>
+        await _context.CriterionPublications
+            .FirstOrDefaultAsync(publication => publication.CriterionId == criterionId && publication.JudgeId == judgeId);
+
+    public async Task UpdateCriterionPublicationAsync(CriterionPublication publication)
+    {
+        _context.CriterionPublications.Update(publication);
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task DeleteCriterionPublicationAsync(CriterionPublication publication)
+    {
+        _context.CriterionPublications.Remove(publication);
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task<List<int>> GetJudgeIdsWithScoresForCriterionAsync(int criterionId) =>
+        await _context.QuestionScores
+            .Where(score => score.CriterionId == criterionId)
+            .Select(score => score.JudgeId)
+            .Distinct()
+            .ToListAsync();
 
     public async Task<List<Sponsor>> GetSponsorsAsync(bool activeOnly = true)
     {

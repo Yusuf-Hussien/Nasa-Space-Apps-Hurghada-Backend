@@ -8,6 +8,7 @@ public interface INasaSpaceAppsRepository
 {
     Task<Team?> GetTeamByUsernameAsync(string username);
     Task<Team?> GetTeamByIdAsync(int teamId);
+    Task<Team?> GetTeamDetailAsync(int teamId);
     Task<List<Team>> GetTeamsAsync(string? search = null);
     Task<List<Challenge>> GetChallengesAsync();
     Task<Challenge?> GetChallengeByIdAsync(int challengeId);
@@ -26,9 +27,34 @@ public interface INasaSpaceAppsRepository
     Task<List<Attendance>> GetAttendancesAsync(int? teamId, DateTime? eventDate, string? status);
     Task<List<JudgeScore>> GetScoresForTeamAsync(int teamId);
     Task<List<JudgeScore>> GetAllScoresAsync();
-    Task<List<JudgingCriterion>> GetJudgingCriteriaAsync();
+    Task<List<JudgingCriterion>> GetJudgingCriteriaAsync(int? challengeId = null);
     Task<JudgingCriterion?> GetJudgingCriterionByIdAsync(int criterionId);
+    Task<JudgingCriterion> AddJudgingCriterionAsync(JudgingCriterion criterion);
+    Task UpdateJudgingCriterionAsync(JudgingCriterion criterion);
+    Task DeleteJudgingCriterionAsync(JudgingCriterion criterion);
     Task AddJudgeScoreAsync(JudgeScore score);
+
+    // Criterion questions (article/reference prompts)
+    Task<List<CriterionQuestion>> GetCriterionQuestionsAsync(int criterionId, bool activeOnly = true);
+    Task<CriterionQuestion?> GetCriterionQuestionByIdAsync(int criterionQuestionId);
+    Task<CriterionQuestion> AddCriterionQuestionAsync(CriterionQuestion question);
+    Task UpdateCriterionQuestionAsync(CriterionQuestion question);
+    Task DeleteCriterionQuestionAsync(CriterionQuestion question);
+
+    // Question scores (per-question judging)
+    Task<QuestionScore> AddQuestionScoreAsync(QuestionScore score);
+    Task<List<QuestionScore>> GetQuestionScoresAsync(int? teamId = null, int? criterionId = null, int? judgeId = null);
+    Task<List<QuestionScore>> GetAllQuestionScoresAsync();
+    Task DeleteQuestionScoreAsync(QuestionScore score);
+    Task UpdateQuestionScoreAsync(QuestionScore score);
+
+    // Criterion publications (per-judge publish state)
+    Task<CriterionPublication> AddCriterionPublicationAsync(CriterionPublication publication);
+    Task<List<CriterionPublication>> GetCriterionPublicationsAsync(int? criterionId = null, int? judgeId = null);
+    Task<CriterionPublication?> GetCriterionPublicationAsync(int criterionId, int judgeId);
+    Task UpdateCriterionPublicationAsync(CriterionPublication publication);
+    Task DeleteCriterionPublicationAsync(CriterionPublication publication);
+    Task<List<int>> GetJudgeIdsWithScoresForCriterionAsync(int criterionId);
     Task<List<Sponsor>> GetSponsorsAsync(bool activeOnly = true);
     Task<Sponsor?> GetSponsorByIdAsync(int sponsorId);
     Task<List<SponsorTier>> GetSponsorTiersAsync();

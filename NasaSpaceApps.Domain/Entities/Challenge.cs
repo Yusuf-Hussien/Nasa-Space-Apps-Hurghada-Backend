@@ -11,4 +11,5 @@ public class Challenge
     public string? Image { get; set; }
     public ICollection<Team> Teams { get; set; } = new List<Team>();
     public ICollection<Question> Questions { get; set; } = new List<Question>();
+    public ICollection<JudgingCriterion> Criteria { get; set; } = new List<JudgingCriterion>();
 }
