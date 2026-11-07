@@ -199,6 +199,7 @@ Free-form string (no server-side whitelist). Suggested UI values:
 | Game | leaderboard | - | - | - | - | submit answer |
 | Season media | list, get | - | create/update/delete | - | - | - |
 | Staff | - | - | all | - | - | - |
+| Core team | list (public homepage) | - | - | - | - | - |
 
 ---
 
@@ -726,6 +727,20 @@ Hard delete. `200` → `{ "id": 1, "deleted": true }`. Errors: `staff.not_found`
 
 ### 14.6 `GET /staff/member-types` - `AdminOnly`
 `200` → `["Organizer","Mentor","Developer","Marketing","PR","Media","Highboard"]`.
+
+### 14.7 `GET /core-team` - Public
+Public list of **active** CoreTeam members for the homepage section. Inactive
+CoreTeam accounts are excluded. `200` → array of public-only fields:
+```json
+{
+  "staffId": 7, "fullName": "Sara Hassan", "memberType": "Mentor",
+  "photo": "data:image/jpeg;base64,..."
+}
+```
+`photo` is the member's picture (base64/data-URI/URL, →1.1), or `null`.
+This route never exposes `email`, `username`, `role`, `status`, `judgeId`,
+`createdAt`, or any account/password data. Admin management still uses the
+`/staff` endpoints above.
 
 ---
 

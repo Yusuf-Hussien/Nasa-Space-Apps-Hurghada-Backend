@@ -1,4 +1,4 @@
-﻿# Frontend Structure Specification: NASA Space Apps Hurghada Platform
+# Frontend Structure Specification: NASA Space Apps Hurghada Platform
 
 **Version:** 1.0  
 **Date:** 2026-10-22  
@@ -47,8 +47,8 @@ src/
 |---|---|---|---|---|
 | / | Landing/Home | Event overview, highlights, sponsors preview | GET /challenges, GET /sponsors, GET /seasonmedia | Entry point |
 | /login | Login Selector | Choose Staff or Participant login | - | Role selection |
-| /login/staff | Staff Login | Staff login form | POST /auth/login/staff | identifier (username/email) + password, ememberMe |
-| /login/participant | Participant Login | Team login form | POST /auth/login/participant | Team username + password, ememberMe |
+| /login/staff | Staff Login | Staff login form | POST /auth/login/staff | identifier (username/email) + password, rememberMe |
+| /login/participant | Participant Login | Team login form | POST /auth/login/participant | Team username + password, rememberMe |
 | /standings | Public Standings | Live scoreboard | GET /judging/standings + SignalR StandingsUpdated | Ranked by %, averaged across published judges, shows judgesCounted, ties |
 | /teams | Teams List | Browse all teams | GET /teams?search= | username hidden unless staff |
 | /teams/:teamId | Team Detail (Public) | Team + full challenge + project + student names only | GET /teams/:teamId | No email/contact for public; username null unless staff |
@@ -57,6 +57,7 @@ src/
 | /sponsors | Sponsors | Sponsors grouped by tier | GET /sponsors, GET /sponsors/tiers | - |
 | /season-media | Season Media Gallery | Past season media | GET /seasonmedia | Public (images/videos/links) |
 | /leaderboard/game | Game Leaderboard | Side trophy leaderboard | GET /game/leaderboard | Public |
+| / (Core Team section) | Core Team Section | Active CoreTeam members on the homepage | GET /core-team | Public; returns only staffId, fullName, memberType, photo |
 
 ### 4.2 Authenticated Pages (Any Role)
 | Route | Page Name | Purpose | Key APIs | Notes |
@@ -109,12 +110,11 @@ src/
 
 ## 5) Judging Model (Frontend Must Follow)
 - **Per-judge publish:** Each judge publishes their own criterion scores independently.
-- **Averaging:** Standings average scores across judges who published (chieved/available per criterion averaged, summed).
+- **Averaging:** Standings average scores across judges who published (achieved/available per criterion averaged, summed).
 - **Visibility:** Unpublished judges' scores do not appear until published.
 - **Upsert:** Resubmitting POST /judging/scores replaces the same judge+team+question.
 - **Skip:** Skipped questions excluded only for that judge.
-- **Ad-hoc:** criterionQuestionId: null, 
-ame optional, maxScore required/explicit.
+- **Ad-hoc:** criterionQuestionId: null, name optional, maxScore required/explicit.
 - **Transparency:** Display judgesCounted per entry and per criterion; show isPublishedByCaller/publishedJudgeCount.
 - **Publishing:** Judges use POST /judging/criteria/:id/publish (own). Admin may omit judgeId (force all with scores) or pass ?judgeId=N.
 

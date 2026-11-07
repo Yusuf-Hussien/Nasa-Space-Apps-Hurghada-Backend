@@ -256,6 +256,7 @@ Public (no token, or `[AllowAnonymous]`):
 - `GET /api/v1/teams`, `GET /api/v1/teams/{id}` (the `username` field is hidden unless the caller is staff)
 - `GET /api/v1/sponsors`, `/sponsors/{id}`, `/sponsors/tiers`, `/sponsors/tiers/{id}`
 - `GET /api/v1/seasonmedia`, `/seasonmedia/{id}`
+- `GET /api/v1/core-team` (active CoreTeam members: `staffId`, `fullName`, `memberType`, `photo` only)
 - `GET /api/v1/judging/criteria`, `GET /api/v1/judging/standings`
 - `GET /api/v1/game/leaderboard`
 - SignalR hub `/hubs/judging`

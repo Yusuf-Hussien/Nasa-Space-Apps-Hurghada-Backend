@@ -70,6 +70,7 @@ public interface INasaSpaceAppsRepository
     Task<Staff?> GetStaffByIdentifierAsync(string identifier);
     Task<Staff?> GetStaffByIdAsync(int staffId);
     Task<List<Staff>> GetStaffsAsync(string? role = null, string? memberType = null, string? search = null);
+    Task<List<Staff>> GetActiveCoreTeamAsync();
     Task<Staff> AddStaffAsync(Staff staff);
     Task UpdateStaffAsync(Staff staff);
     Task DeleteStaffAsync(Staff staff);

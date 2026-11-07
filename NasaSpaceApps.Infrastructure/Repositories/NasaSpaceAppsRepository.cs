@@ -543,6 +543,14 @@ public sealed class NasaSpaceAppsRepository : INasaSpaceAppsRepository
         return await query.OrderBy(s => s.FullName).ToListAsync();
     }
 
+    public async Task<List<Staff>> GetActiveCoreTeamAsync()
+    {
+        return await _context.Staff
+            .Where(s => s.Role == AppRoles.CoreTeam && s.Status == "Active")
+            .OrderBy(s => s.FullName)
+            .ToListAsync();
+    }
+
     public async Task<Staff> AddStaffAsync(Staff staff)
     {
         _context.Staff.Add(staff);

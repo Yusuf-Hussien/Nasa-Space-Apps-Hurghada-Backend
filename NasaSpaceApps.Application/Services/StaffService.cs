@@ -22,6 +22,12 @@ public sealed class StaffService
         return Result<List<Staff>>.Success(staffs);
     }
 
+    public async Task<Result<List<Staff>>> GetPublicCoreTeamAsync()
+    {
+        var members = await _repository.GetActiveCoreTeamAsync();
+        return Result<List<Staff>>.Success(members);
+    }
+
     public async Task<Result<Staff>> GetStaffByIdAsync(int staffId)
     {
         var staff = await _repository.GetStaffByIdAsync(staffId);
