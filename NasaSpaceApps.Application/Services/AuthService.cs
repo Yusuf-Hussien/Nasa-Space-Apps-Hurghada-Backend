@@ -117,4 +117,62 @@ public sealed class AuthService
 
         return Result<LoginResponse>.Failure("user.unauthenticated", 401, "Not authenticated.");
     }
+
+    public async Task<Result<bool>> ChangePasswordAsync(
+        ICurrentUser user,
+        string currentPassword,
+        string newPassword)
+    {
+        if (user.TeamId.HasValue)
+        {
+            var team = await _repository.GetTeamByIdAsync(user.TeamId.Value);
+            if (team is null)
+            {
+                return Result<bool>.Failure("user.not_found", 404, "Team not found.");
+            }
+
+            if (!team.Status.Equals("Active", StringComparison.OrdinalIgnoreCase))
+            {
+                return Result<bool>.Failure("auth.account_inactive", 403, "Account is inactive.");
+            }
+
+            var matches = _passwordHasher.Verify(currentPassword ?? string.Empty, team.PasswordHash);
+            var error = PasswordChangePolicy.Validate(currentPassword, newPassword, matches);
+            if (error is not null)
+            {
+                return Result<bool>.Failure(error.Code, error.HttpStatus, error.Message);
+            }
+
+            team.PasswordHash = _passwordHasher.Hash(newPassword);
+            await _repository.UpdateTeamAsync(team);
+            return Result<bool>.Success(true);
+        }
+
+        if (user.StaffId.HasValue)
+        {
+            var staff = await _repository.GetStaffByIdAsync(user.StaffId.Value);
+            if (staff is null)
+            {
+                return Result<bool>.Failure("user.not_found", 404, "Staff account not found.");
+            }
+
+            if (!staff.Status.Equals("Active", StringComparison.OrdinalIgnoreCase))
+            {
+                return Result<bool>.Failure("auth.account_inactive", 403, "Account is inactive.");
+            }
+
+            var matches = _passwordHasher.Verify(currentPassword ?? string.Empty, staff.PasswordHash);
+            var error = PasswordChangePolicy.Validate(currentPassword, newPassword, matches);
+            if (error is not null)
+            {
+                return Result<bool>.Failure(error.Code, error.HttpStatus, error.Message);
+            }
+
+            staff.PasswordHash = _passwordHasher.Hash(newPassword);
+            await _repository.UpdateStaffAsync(staff);
+            return Result<bool>.Success(true);
+        }
+
+        return Result<bool>.Failure("user.unauthenticated", 401, "Not authenticated.");
+    }
 }

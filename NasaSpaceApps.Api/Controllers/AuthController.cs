@@ -49,6 +49,15 @@ public class AuthController : ControllerBase
         return result.ToHttpResult<LoginResponse, object>(this, ToRoleSpecificResponse);
     }
 
+    [Authorize]
+    [HttpPost("change-password")]
+    public async Task<ActionResult<ChangePasswordResponse>> ChangePassword([FromBody] ChangePasswordRequest request)
+    {
+        var result = await _authService.ChangePasswordAsync(
+            _currentUser, request.CurrentPassword, request.NewPassword);
+        return result.ToHttpResult(this, _ => new ChangePasswordResponse("Password changed successfully."));
+    }
+
     /// <summary>Picks the response shape from the account's role, so neither role
     /// receives the other's fields.</summary>
     private static object ToRoleSpecificResponse(LoginResponse value) =>

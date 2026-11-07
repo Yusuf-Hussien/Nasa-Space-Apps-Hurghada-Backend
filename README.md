@@ -191,6 +191,7 @@ frontend and mobile teams lives in [`Docs/API_CONTRACT.md`](Docs/API_CONTRACT.md
 | `POST` | `/auth/login/staff` | Staff login (`identifier` + `password`) and receive a JWT |
 | `POST` | `/auth/login/participant` | Participant login (`username` + `password`) and receive a JWT plus team/challenge details |
 | `GET` | `/auth/me` | Current authenticated account |
+| `POST` | `/auth/change-password` | Change own password (`currentPassword` + `newPassword`) |
 | `GET` | `/teams` | Search or list teams |
 | `GET` | `/teams/{teamId}` | Get one team (public; includes challenge, project, student names) |
 | `GET` | `/teams/{teamId}/students` | Get team members |
@@ -264,6 +265,7 @@ Public (no token, or `[AllowAnonymous]`):
 Any authenticated role:
 
 - `GET /api/v1/auth/me`
+- `POST /api/v1/auth/change-password` (changes the account identified by the token)
 - `GET /api/v1/requests` (participants are forced to their own team; staff may filter by any team)
 - `POST /api/v1/requests` (participants use their own team; staff may post for any team)
 - `DELETE /api/v1/requests/{id}` (participants are limited to their own team)

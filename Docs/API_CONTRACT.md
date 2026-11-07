@@ -22,7 +22,7 @@ this repository - if a field or error code is listed here, it exists in code.
 | Auth header | `Authorization: Bearer <accessToken>` |
 | Success | `200 OK` with the resource body. Deletes return `200` with a `DeletedResponse` (not `204`). |
 | Errors | Always `{ "error": { "code": "...", "message": "..." } }` (see §3). |
-| 401 / 403 | A missing/invalid token returns `401`, and a role/policy failure returns `403` with an **empty body** (no error envelope). The two in-code 403s (§9.2 and §12.3) are the exception and do carry the envelope. |
+| 401 / 403 | A missing/invalid token returns `401`, and a role/policy failure returns `403` with an **empty body** (no error envelope). In-code 403s (§9.2 and §12.3) are the exception and do carry the envelope. |
 
 All responses use terse, role-appropriate shapes: sensitive fields are stripped
 per caller (e.g. teams hide `username` from non-staff; questions hide
@@ -111,7 +111,11 @@ Full catalogue of codes (HTTP status in parentheses):
 | Code | Meaning |
 | --- | --- |
 | `auth.invalid_credentials` (401) | Bad identifier/username/password, or inactive account/team. |
-| `user.not_found` (404) | `/auth/me` - the token's account no longer exists. |
+| `auth.invalid_current_password` (400) | Change password: the supplied current password is wrong. |
+| `auth.weak_password` (400) | Change password: new password is blank or shorter than 6 characters. |
+| `auth.password_unchanged` (400) | Change password: new password equals the current password. |
+| `auth.account_inactive` (403) | Change password: the authenticated account is no longer Active. |
+| `user.not_found` (404) | `/auth/me` or change password - the token's account no longer exists. |
 | `user.unauthenticated` (401) | `/auth/me` - no resolvable identity. |
 | `challenge.not_found` (404) | Challenge id does not exist. |
 | `team.not_found` (404) | Team id does not exist. |
@@ -188,7 +192,7 @@ Free-form string (no server-side whitelist). Suggested UI values:
 
 | Area | Public reads | Any authenticated | Admin | CoreTeam | Judge | Participant |
 | --- | --- | --- | --- | --- | --- | --- |
-| Auth | login routes | `me` | - | - | - | - |
+| Auth | login routes | `me`, change password | - | - | - | - |
 | Challenges | list, get | - | set image | - | - | - |
 | Teams | list, detail | - | set logo | students (Staff) | - | - |
 | Attendance | - | list (Staff) | - | teams, bulk mark | - | - |
@@ -256,6 +260,69 @@ participant shape of §5.2 for a team - including `team`, `challenge`, and
 `students`). The token is **not** re-issued - `accessToken` is always the empty
 string `""` here (the field exists only for shape compatibility).
 Errors: `user.not_found`, `user.unauthenticated`.
+
+### 5.4 `POST /auth/change-password` - Any authenticated
+Changes the password of the account identified by the bearer token. No account id
+is accepted in the body, so a caller can only change its own password. Works for
+both staff and participant tokens.
+
+Body:
+```json
+{ "currentPassword": "OldPassword1!", "newPassword": "NewPassword1!" }
+```
+
+Rules:
+- Both fields are required.
+- `newPassword` must be at least **6 characters** (same minimum as staff creation).
+- `newPassword` must be different from `currentPassword`.
+- Passwords are not trimmed; send them exactly as typed.
+
+Success `200`:
+```json
+{ "message": "Password changed successfully." }
+```
+
+Errors: `auth.invalid_current_password` (400), `auth.weak_password` (400),
+`auth.password_unchanged` (400), `auth.account_inactive` (403),
+`user.not_found` (404), `user.unauthenticated` (401).
+
+The current access token is **not** re-issued or revoked; it stays valid until
+its normal expiry, so the user can keep using the app after a successful change.
+A wrong current password returns `400`, not `401`, so a global `401` interceptor
+should not log the user out for this case.
+
+Web/mobile client flow:
+1. Show `currentPassword`, `newPassword`, and a client-only `confirmNewPassword`.
+2. Validate length and equality before submitting; do not send the confirmation field.
+3. Send the bearer token. On `200`, show success and clear the form without logging out.
+4. Map the error code to a field message; on `403`/`404`, clear the session and re-login.
+
+TypeScript example:
+```ts
+await fetch(`${API_BASE}/api/v1/auth/change-password`, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${accessToken}`,
+  },
+  body: JSON.stringify({ currentPassword, newPassword }),
+});
+```
+
+Flutter/Dart example:
+```dart
+final response = await http.post(
+  Uri.parse('$apiBase/api/v1/auth/change-password'),
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer $accessToken',
+  },
+  body: jsonEncode({
+    'currentPassword': currentPassword,
+    'newPassword': newPassword,
+  }),
+);
+```
 
 ---
 

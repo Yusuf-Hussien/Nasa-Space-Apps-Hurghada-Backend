@@ -63,8 +63,20 @@ src/
 | Route | Page Name | Purpose | Key APIs | Notes |
 |---|---|---|---|---|
 | /me | Profile | Current user info | GET /auth/me | Role-specific shape |
+| /account/change-password | Change Password | Update own password | POST /auth/change-password | Any authenticated role; current + new password |
 | /requests | Service Requests | List/create/delete requests | GET /requests, POST /requests, DELETE /requests/:requestId | Participant scoped to own team; staff see all |
 | /questions | Questions Bank | Browse questions | GET /questions, GET /questions/:questionId | Answers stripped for participants, full for staff |
+
+#### 4.2.1 Change Password (Web + Mobile)
+- **Web route:** `/account/change-password` under `features/auth`; link it from the profile menu for every authenticated role.
+- **Mobile screen:** `ChangePasswordScreen` in the account/settings area, reachable from the participant dashboard and staff profile.
+- **Fields:** current password, new password, confirm new password. Confirmation is client-side only and is not sent.
+- **API:** `POST /api/v1/auth/change-password` with the bearer token.
+- **Body:** `{ "currentPassword": "...", "newPassword": "..." }`.
+- **Client validation:** new password at least 6 characters and different from the current password.
+- **Success:** show a success message, clear the form, and keep the current session. The access token is not reissued and remains valid until expiry.
+- **Errors:** map `auth.invalid_current_password`, `auth.weak_password`, and `auth.password_unchanged` to form errors without logging out. On `auth.account_inactive`, `user.not_found`, or a normal `401`, clear the session and redirect to login.
+- **Do not:** send a user/team/staff id in the body; the backend derives the account from the token.
 
 ### 4.3 Staff Pages (Admin/CoreTeam/Judge)
 | Route | Page Name | Purpose | Key APIs | Notes |
@@ -148,6 +160,7 @@ src/
 - [ ] Setup router + guards + providers
 - [ ] API client + auth interceptor
 - [ ] Auth flows (staff/participant)
+- [ ] Change-password screen (web + mobile)
 - [ ] Public pages + standings (SignalR)
 - [ ] Judge scoring + per-judge publish
 - [ ] Admin criteria + publish management
