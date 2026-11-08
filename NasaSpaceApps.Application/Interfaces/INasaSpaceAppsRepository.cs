@@ -93,6 +93,9 @@ public interface INasaSpaceAppsRepository
     Task DeleteSeasonMediaAsync(SeasonMedia media);
 
     // Game (side trophy)
+    Task<GameState?> GetGameStateAsync();
+    Task<GameState> GetOrCreateGameStateAsync();
+    Task UpdateGameStateAsync(GameState state);
     Task<List<GameParticipation>> GetParticipationsAsync(int questionId);
     Task<GameParticipation?> GetParticipationAsync(int questionId, int teamId);
     Task<GameParticipation> AddParticipationAsync(GameParticipation participation);

@@ -527,6 +527,22 @@ BEGIN
         ALTER TABLE [Questions] ADD [IsActive] BIT NOT NULL DEFAULT 1;
 END
 
+-- ============ GameState (single-row competition state) ============
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'GameStates')
+BEGIN
+    CREATE TABLE [GameStates] (
+        [GameStateId] INT NOT NULL PRIMARY KEY,
+        [IsStarted] BIT NOT NULL DEFAULT 0,
+        [StartedAt] DATETIME2 NULL,
+        [StoppedAt] DATETIME2 NULL,
+        [UpdatedAt] DATETIME2 NOT NULL DEFAULT GETUTCDATE()
+    );
+END
+
+IF NOT EXISTS (SELECT 1 FROM [GameStates] WHERE [GameStateId] = 1)
+    INSERT INTO [GameStates] ([GameStateId], [IsStarted], [UpdatedAt])
+    VALUES (1, 0, GETUTCDATE());
+
 -- ============ GameParticipations ============
 IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'GameParticipations')
 BEGIN

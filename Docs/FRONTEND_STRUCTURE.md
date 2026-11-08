@@ -106,7 +106,7 @@ src/
 | /admin/criteria | Criteria Management | CRUD criteria + article questions | GET/POST/PUT/DELETE /judging/criteria | AdminOnly |
 | /admin/criteria/publish | Publish Management | Force-publish/target judges | GET /judging/criteria, POST /judging/criteria/:criterionId/publish?judgeId=, GET /judging/scores?teamId= | AdminOnly - omit judgeId to force-publish all judges with scores |
 | /admin/sponsors | Sponsors Management | CRUD sponsors/tiers + logos | GET/POST/PUT/DELETE /sponsors, GET/POST/PUT/DELETE /sponsors/tiers | AdminOnly, base64/data URI/URL (20MB decoded) |
-| /admin/questions | Game Questions Management | CRUD + publish/unpublish | GET/POST/PUT/DELETE /questions, POST /questions/:questionId/publish, POST /questions/:questionId/unpublish | AdminOnly |
+| /admin/questions | Game Questions Management | Start/stop game + CRUD + publish/unpublish | GET /game/state, POST /game/start, POST /game/stop, GET/POST/PUT/DELETE /questions, POST /questions/:questionId/publish, POST /questions/:questionId/unpublish | AdminOnly; start game first, then publish individual questions to reveal them |
 | /admin/season-media | Season Media Management | CRUD season media | GET/POST/PUT/DELETE /seasonmedia | AdminOnly |
 | /admin/challenges | Challenges Management | Set challenge images | PATCH /challenges/:challengeId/image | AdminOnly |
 | /admin/teams | Teams Management | Set team logos | PATCH /teams/:teamId/logo | AdminOnly |
@@ -115,7 +115,7 @@ src/
 | Route | Page Name | Purpose | Key APIs | Notes |
 |---|---|---|---|---|
 | /participant/dashboard | Participant Dashboard | Team info, challenge, project | GET /auth/me or GET /teams/:teamId | ParticipantOnly |
-| /participant/game | Game Play | Answer game questions | GET /questions, POST /game/questions/:questionId/answer | One answer per team per question; free-text/MCQ rules apply |
+| /participant/game | Game Play | Wait for admin start, then answer questions | GET /game/state, GET /questions, POST /game/questions/:questionId/answer | Show a waiting screen when `isStarted` is false; questions are hidden until both started and published; one answer per team per question |
 | /participant/requests | My Requests | Create/manage own requests | GET/POST/DELETE /requests | Auto-scoped to own team |
 
 ---

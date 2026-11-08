@@ -142,6 +142,7 @@ Full catalogue of codes (HTTP status in parentheses):
 | `attendance.invalid_status` (400) | Status not Present/Absent/Late. |
 | `attendance.students_not_found` (404) | One or more `studentId`s do not exist. |
 | `game.not_participant` (403) | Answer submitted without a team identity. |
+| `game.not_started` (409) | Answer submitted before an admin starts the game. |
 | `answer.empty` (400) | Blank answer. |
 | `answer.already_submitted` (409) | Team already answered that question. |
 | `judging.no_scores` (400) | `scores` list empty, or no scores exist to publish for that judge/criterion. |
@@ -200,7 +201,7 @@ Free-form string (no server-side whitelist). Suggested UI values:
 | Sponsors | list, tiers, get | - | create/update/delete | - | - | - |
 | Questions | - | list, get | create/update/publish/delete | - | - | - |
 | Judging | criteria, standings | - | criteria CRUD | scores (Staff) | submit scores, publish/unpublish own scores | - |
-| Game | leaderboard | - | - | - | - | submit answer |
+| Game | state, leaderboard | - | start/stop | - | - | submit answer |
 | Season media | list, get | - | create/update/delete | - | - | - |
 | Staff | - | - | all | - | - | - |
 | Core team | list (public homepage) | - | - | - | - | - |
@@ -544,8 +545,10 @@ Same body. Errors: `sponsor_tier.not_found`, `sponsor_tier.invalid`.
 ## 11. Questions (quiz bank)
 
 `QuestionsController` is class-level `[Authorize]`, so even reads need a token.
-Participants see only **published, active** questions and **never** the
-`correctAnswer`; staff see everything including answers.
+Participants see only **released (published), active** questions while the
+competition is **started** by an admin, and **never** the `correctAnswer`;
+staff see everything including answers. A participant's `GET /questions`
+returns `[]` until `POST /game/start` is called.
 
 ### 11.1 `GET /questions?challengeId=` - Any authenticated
 `200` → array of:
@@ -589,6 +592,10 @@ Sets `isPublished:false`, clears `publishedAt`. Errors: `question.not_found`.
 ### 11.7 `DELETE /questions/{id}` - `AdminOnly`
 Soft delete: sets `isActive:false`, `isPublished:false`. `200` →
 `{ "id": 1, "deleted": true }`. Errors: `question.not_found`.
+
+> Publishing is the per-question reveal control. A published question is still
+> hidden from participants until `POST /game/start` has been called. This lets
+> an admin start the competition, then reveal questions one at a time.
 
 ---
 
@@ -713,14 +720,36 @@ in-code `403 judging.no_judge_link`, `team.not_found`, `judging.no_scores`,
 
 ## 13. Game (side trophy)
 
-### 13.1 `GET /game/leaderboard` - Public
+The game is hidden by default. An admin starts it, then releases questions
+individually with `POST /questions/{id}/publish`. Participants can see and
+answer a question only while the game is started **and** the question is
+published. Stopping the game immediately hides all questions from participants.
+
+### 13.1 `GET /game/state` - Public
+`200`:
+```json
+{ "isStarted": false, "startedAt": null, "stoppedAt": null, "updatedAt": "2026-10-04T09:30:00Z" }
+```
+Poll this (or refresh on navigation) to show the participant waiting screen.
+
+### 13.2 `POST /game/start` - `AdminOnly`
+Starts the competition and returns the same `GameStateResponse`. Idempotent:
+calling it while already started returns the current state unchanged.
+Participants still see only questions that have been published.
+
+### 13.3 `POST /game/stop` - `AdminOnly`
+Stops the competition and returns the same `GameStateResponse`. Idempotent.
+Participants immediately receive `[]` from `GET /questions` and
+`404 question.not_found` for direct question reads.
+
+### 13.4 `GET /game/leaderboard` - Public
 `200` → array of:
 ```json
 { "rank": 1, "teamId": 1, "teamName": "Orion", "correctCount": 4, "totalPoints": 40, "isTied": false }
 ```
 Ordering: points desc, then correct-count desc, then name.
 
-### 13.2 `POST /game/questions/{questionId}/answer` - `ParticipantOnly`
+### 13.5 `POST /game/questions/{questionId}/answer` - `ParticipantOnly`
 The answering team comes from the token. One answer per team per question.
 Body:
 ```json
@@ -732,8 +761,8 @@ Body:
 ```
 Question must be active **and** published. Grading: free-text is
 case-insensitive trimmed compare; multiple-choice accepts the option text, or
-a zero-based index as a string. Errors: `question.not_found`, `answer.empty`,
-`answer.already_submitted`, `game.not_participant`.
+a zero-based index as a string. Errors: `game.not_started`, `question.not_found`,
+`answer.empty`, `answer.already_submitted`, `game.not_participant`.
 
 ---
 

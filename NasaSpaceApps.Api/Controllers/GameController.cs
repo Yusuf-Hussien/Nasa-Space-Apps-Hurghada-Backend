@@ -20,6 +20,33 @@ public class GameController : ControllerBase
         _currentUser = currentUser;
     }
 
+    /// <summary>Current competition state. Public so clients can show the waiting screen.</summary>
+    [AllowAnonymous]
+    [HttpGet("state")]
+    public async Task<ActionResult<GameStateResponse>> GetState()
+    {
+        var result = await _gameService.GetStateAsync();
+        return result.ToHttpResult(this, GameStateResponse.From);
+    }
+
+    /// <summary>Start the competition so participants can see released questions.</summary>
+    [Authorize(Policy = "AdminOnly")]
+    [HttpPost("start")]
+    public async Task<ActionResult<GameStateResponse>> Start()
+    {
+        var result = await _gameService.StartAsync();
+        return result.ToHttpResult(this, GameStateResponse.From);
+    }
+
+    /// <summary>Stop the competition. Participants immediately lose access to questions.</summary>
+    [Authorize(Policy = "AdminOnly")]
+    [HttpPost("stop")]
+    public async Task<ActionResult<GameStateResponse>> Stop()
+    {
+        var result = await _gameService.StopAsync();
+        return result.ToHttpResult(this, GameStateResponse.From);
+    }
+
     /// <summary>Side trophy leaderboard. Public so spectators can view it.</summary>
     [AllowAnonymous]
     [HttpGet("leaderboard")]

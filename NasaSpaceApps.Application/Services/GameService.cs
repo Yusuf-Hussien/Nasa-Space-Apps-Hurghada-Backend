@@ -15,6 +15,43 @@ public sealed class GameService
         _repository = repository;
     }
 
+    public async Task<Result<GameState>> GetStateAsync()
+    {
+        var state = await _repository.GetOrCreateGameStateAsync();
+        return Result<GameState>.Success(state);
+    }
+
+    public async Task<Result<GameState>> StartAsync()
+    {
+        var state = await _repository.GetOrCreateGameStateAsync();
+        if (!state.IsStarted)
+        {
+            var now = DateTime.UtcNow;
+            state.IsStarted = true;
+            state.StartedAt = now;
+            state.StoppedAt = null;
+            state.UpdatedAt = now;
+            await _repository.UpdateGameStateAsync(state);
+        }
+
+        return Result<GameState>.Success(state);
+    }
+
+    public async Task<Result<GameState>> StopAsync()
+    {
+        var state = await _repository.GetOrCreateGameStateAsync();
+        if (state.IsStarted)
+        {
+            var now = DateTime.UtcNow;
+            state.IsStarted = false;
+            state.StoppedAt = now;
+            state.UpdatedAt = now;
+            await _repository.UpdateGameStateAsync(state);
+        }
+
+        return Result<GameState>.Success(state);
+    }
+
     public async Task<Result<AnswerResult>> SubmitAnswerAsync(int questionId, string answer, ICurrentUser user)
     {
         if (!user.TeamId.HasValue)
@@ -22,10 +59,16 @@ public sealed class GameService
             return Result<AnswerResult>.Failure("game.not_participant", 403, "Only participants can submit answers.");
         }
 
+        var state = await _repository.GetGameStateAsync();
+        if (state?.IsStarted != true)
+        {
+            return Result<AnswerResult>.Failure("game.not_started", 409, "The game has not started yet.");
+        }
+
         var teamId = user.TeamId.Value;
         var question = await _repository.GetQuestionByIdAsync(questionId);
 
-        if (question is null || !question.IsActive || !question.IsPublished)
+        if (question is null || !GameVisibilityPolicy.CanParticipantSee(state, question))
         {
             return Result<AnswerResult>.Failure("question.not_found", 404, "Question not found or not published.");
         }

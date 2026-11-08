@@ -210,6 +210,9 @@ frontend and mobile teams lives in [`Docs/API_CONTRACT.md`](Docs/API_CONTRACT.md
 | `GET` | `/judging/standings` | Public scoreboard (averaged across published judges) |
 | `POST` | `/judging/scores` | Submit per-question judge scores (upsert) |
 | `GET` | `/judging/scores?teamId=` | Per-question score detail (Staff) |
+| `GET` | `/game/state` | Public competition start/stop state |
+| `POST` | `/game/start` | Start the competition (Admin) |
+| `POST` | `/game/stop` | Stop the competition (Admin) |
 | `GET` | `/sponsors` | List active sponsors |
 | `GET` | `/seasonmedia` | List season media (public) |
 | `POST` | `/seasonmedia` | Create season media (Admin, base64 ≤ 20 MB) |
@@ -259,7 +262,7 @@ Public (no token, or `[AllowAnonymous]`):
 - `GET /api/v1/seasonmedia`, `/seasonmedia/{id}`
 - `GET /api/v1/core-team` (active CoreTeam members: `staffId`, `fullName`, `memberType`, `photo` only)
 - `GET /api/v1/judging/criteria`, `GET /api/v1/judging/standings`
-- `GET /api/v1/game/leaderboard`
+- `GET /api/v1/game/state`, `GET /api/v1/game/leaderboard`
 - SignalR hub `/hubs/judging`
 
 Any authenticated role:
@@ -269,7 +272,7 @@ Any authenticated role:
 - `GET /api/v1/requests` (participants are forced to their own team; staff may filter by any team)
 - `POST /api/v1/requests` (participants use their own team; staff may post for any team)
 - `DELETE /api/v1/requests/{id}` (participants are limited to their own team)
-- `GET /api/v1/questions`, `GET /api/v1/questions/{id}` (staff receive correct answers; participants see published questions with answers stripped)
+- `GET /api/v1/questions`, `GET /api/v1/questions/{id}` (staff receive correct answers; participants see only published questions while the game is started, with answers stripped)
 - SignalR hub `/hubs/requests` (joining the `Organizers` group requires staff)
 
 `StaffOnly` — `Admin`, `CoreTeam`, `Judge`:
@@ -283,6 +286,7 @@ Any authenticated role:
 
 - All of `/api/v1/staff` (including `/staff/member-types`)
 - `POST`, `PUT`, `DELETE` on `/api/v1/sponsors` and `/api/v1/sponsors/tiers`
+- `POST /api/v1/game/start`, `POST /api/v1/game/stop`
 - `POST`, `PUT`, `DELETE` on `/api/v1/questions`, plus `/questions/{id}/publish` and `/questions/{id}/unpublish`
 - `POST`, `PUT`, `DELETE` on `/api/v1/judging/criteria`
 - `PATCH /api/v1/teams/{id}/logo`, `PATCH /api/v1/challenges/{id}/image`
@@ -322,6 +326,8 @@ Any authenticated role:
 | Manage judging criteria | Yes | No | No | No |
 | Publish / unpublish own scores | No | No | Yes | No |
 | Publish / unpublish any judge's scores (force) | Yes | No | No | No |
+| Start / stop the side trophy | Yes | No | No | No |
+| See released questions while game is started | Yes | Yes | Yes | Yes |
 | Submit a side-trophy answer | No | No | No | Yes |
 | Manage staff, sponsors, questions | Yes | No | No | No |
 

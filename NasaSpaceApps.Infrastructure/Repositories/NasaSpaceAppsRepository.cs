@@ -668,6 +668,38 @@ public sealed class NasaSpaceAppsRepository : INasaSpaceAppsRepository
 
     // ---- Game (side trophy) ----
 
+    public async Task<GameState?> GetGameStateAsync()
+    {
+        return await _context.GameStates
+            .FirstOrDefaultAsync(state => state.GameStateId == GameState.SingletonId);
+    }
+
+    public async Task<GameState> GetOrCreateGameStateAsync()
+    {
+        var state = await GetGameStateAsync();
+        if (state is not null)
+        {
+            return state;
+        }
+
+        state = new GameState
+        {
+            GameStateId = GameState.SingletonId,
+            IsStarted = false,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        _context.GameStates.Add(state);
+        await _context.SaveChangesAsync();
+        return state;
+    }
+
+    public async Task UpdateGameStateAsync(GameState state)
+    {
+        _context.GameStates.Update(state);
+        await _context.SaveChangesAsync();
+    }
+
     public async Task<List<GameParticipation>> GetParticipationsAsync(int questionId)
     {
         return await _context.GameParticipations

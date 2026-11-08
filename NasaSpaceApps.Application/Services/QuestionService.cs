@@ -23,7 +23,14 @@ public sealed class QuestionService
             return Result<List<Question>>.Success(all);
         }
 
-        // Participant (or anonymous) see only published, active questions
+        // Participants see nothing until an admin starts the competition.
+        var state = await _repository.GetGameStateAsync();
+        if (state?.IsStarted != true)
+        {
+            return Result<List<Question>>.Success([]);
+        }
+
+        // Once started, participants see only questions released by an admin.
         var published = await _repository.GetPublishedQuestionsAsync(challengeId);
         return Result<List<Question>>.Success(published);
     }
@@ -36,10 +43,14 @@ public sealed class QuestionService
             return Result<Question>.Failure("question.not_found", 404, "Question not found.");
         }
 
-        // Participants can only see published questions
-        if (!user.IsStaff && !question.IsPublished)
+        // Participants can only see released questions while the game is running.
+        if (!user.IsStaff)
         {
-            return Result<Question>.Failure("question.not_found", 404, "Question not found.");
+            var state = await _repository.GetGameStateAsync();
+            if (!GameVisibilityPolicy.CanParticipantSee(state, question))
+            {
+                return Result<Question>.Failure("question.not_found", 404, "Question not found.");
+            }
         }
 
         return Result<Question>.Success(question);

@@ -22,6 +22,7 @@ public class NasaSpaceAppsDbContext : DbContext
     public DbSet<Attendance> Attendances => Set<Attendance>();
     public DbSet<ServiceRequest> ServiceRequests => Set<ServiceRequest>();
     public DbSet<Question> Questions => Set<Question>();
+    public DbSet<GameState> GameStates => Set<GameState>();
     public DbSet<GameParticipation> GameParticipations => Set<GameParticipation>();
     public DbSet<SponsorTier> SponsorTiers => Set<SponsorTier>();
     public DbSet<Sponsor> Sponsors => Set<Sponsor>();
@@ -42,6 +43,7 @@ public class NasaSpaceAppsDbContext : DbContext
         modelBuilder.Entity<Attendance>().HasKey(attendance => attendance.AttendanceId);
         modelBuilder.Entity<ServiceRequest>().HasKey(request => request.RequestId);
         modelBuilder.Entity<Question>().HasKey(question => question.QuestionId);
+        modelBuilder.Entity<GameState>().HasKey(state => state.GameStateId);
         modelBuilder.Entity<GameParticipation>().HasKey(participation => participation.ParticipationId);
         modelBuilder.Entity<SponsorTier>().HasKey(tier => tier.TierId);
         modelBuilder.Entity<Sponsor>().HasKey(sponsor => sponsor.SponsorId);
