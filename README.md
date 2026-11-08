@@ -139,6 +139,54 @@ dotnet user-secrets set "Jwt:Audience" "NasaSpaceApps.Client" --project NasaSpac
 
 The fallback JWT key in `appsettings.json` is for local development only. Use a secret manager or environment variables outside local development.
 
+### Email SMTP configuration
+
+The admin bulk-email endpoint (`POST /api/v1/email/send`) uses Google/Gmail
+SMTP by default. For a Google account, only **two** values are required:
+`EMAIL_FROM_ADDRESS` and `EMAIL_SMTP_PASSWORD`. Use a Google **App Password**,
+not the normal account password (Google requires 2-Step Verification to create
+one). The username defaults to the from address, and the host, port, and SSL
+settings default to Gmail.
+
+Set these in the hosting panel (or the server process environment), then
+restart the API:
+
+| Environment variable | Required | Default | Purpose |
+|---|---:|---|---|
+| `EMAIL_FROM_ADDRESS` | Yes | - | Google account/alias used as sender |
+| `EMAIL_SMTP_PASSWORD` | Yes | - | Google App Password (16 characters) |
+| `EMAIL_SMTP_HOST` | No | `smtp.gmail.com` | SMTP host; override only for a custom relay |
+| `EMAIL_SMTP_PORT` | No | `587` | SMTP port |
+| `EMAIL_SMTP_USERNAME` | No | from address | SMTP login; override only if different |
+| `EMAIL_FROM_NAME` | No | `NASA Space Apps Challenge Hurghada` | Sender display name |
+| `EMAIL_USE_SSL` | No | `true` | Enable STARTTLS |
+| `EMAIL_MAX_RECIPIENTS` | No | `2000` | Maximum accepted recipients per request |
+| `EMAIL_MAX_CONCURRENCY` | No | `4` | Number of simultaneous SMTP sends |
+
+The built-in .NET SMTP client uses STARTTLS on port `587`; implicit SSL on port
+`465` is not supported without a different transport implementation.
+
+Local example (do not commit real credentials):
+
+```powershell
+$env:EMAIL_FROM_ADDRESS = "info@spaceappshurghada.com"
+$env:EMAIL_SMTP_PASSWORD = "your-google-app-password"
+```
+
+Optional overrides:
+
+```powershell
+$env:EMAIL_SMTP_HOST = "smtp.gmail.com"
+$env:EMAIL_SMTP_PORT = "587"
+$env:EMAIL_SMTP_USERNAME = "info@spaceappshurghada.com"
+$env:EMAIL_FROM_NAME = "NASA Space Apps Challenge Hurghada"
+$env:EMAIL_USE_SSL = "true"
+```
+
+If the email variables are missing or invalid, the API still starts normally;
+only `POST /api/v1/email/send` returns `503 email.not_configured`. The message
+includes which key is missing. The SMTP password is never exposed by the API.
+
 ## Run Locally
 
 Prerequisites:
@@ -216,6 +264,7 @@ frontend and mobile teams lives in [`Docs/API_CONTRACT.md`](Docs/API_CONTRACT.md
 | `GET` | `/sponsors` | List active sponsors |
 | `GET` | `/seasonmedia` | List season media (public) |
 | `POST` | `/seasonmedia` | Create season media (Admin, base64 ≤ 20 MB) |
+| `POST` | `/email/send` | Send branded email to one or many recipients (Admin) |
 
 Example participant login using the development seed data:
 
@@ -291,6 +340,7 @@ Any authenticated role:
 - `POST`, `PUT`, `DELETE` on `/api/v1/judging/criteria`
 - `PATCH /api/v1/teams/{id}/logo`, `PATCH /api/v1/challenges/{id}/image`
 - `POST`, `PUT`, `DELETE` on `/api/v1/seasonmedia`
+- `POST /api/v1/email/send` (bulk email)
 
 `CoreTeamOnly` — `CoreTeam`:
 
@@ -330,6 +380,7 @@ Any authenticated role:
 | See released questions while game is started | Yes | Yes | Yes | Yes |
 | Submit a side-trophy answer | No | No | No | Yes |
 | Manage staff, sponsors, questions | Yes | No | No | No |
+| Send branded bulk email | Yes | No | No | No |
 
 ### Real-time hubs
 

@@ -203,6 +203,7 @@ Free-form string (no server-side whitelist). Suggested UI values:
 | Judging | criteria, standings | - | criteria CRUD | scores (Staff) | submit scores, publish/unpublish own scores | - |
 | Game | state, leaderboard | - | start/stop | - | - | submit answer |
 | Season media | list, get | - | create/update/delete | - | - | - |
+| Email | - | - | send | - | - | - |
 | Staff | - | - | all | - | - | - |
 | Core team | list (public homepage) | - | - | - | - | - |
 
@@ -876,6 +877,92 @@ Same body & response as create. Errors: `season_media.not_found`, `season_media.
 
 ### 14b.5 `DELETE /seasonmedia/{mediaId}` - `AdminOnly`
 `200` → `{ "id": 1, "deleted": true }`. Errors: `season_media.not_found`.
+
+---
+
+## 14c. Email - `AdminOnly` (whole controller)
+
+Admin bulk-email endpoint. Every accepted recipient receives an individual
+message (no shared To/Cc list), so recipient addresses are not exposed to each
+other. Duplicate addresses are removed case-insensitively before sending.
+
+The service automatically wraps the admin body in the NASA Space Apps Hurghada
+branded template. The footer/signature always includes:
+
+- Local event: https://www.spaceappschallenge.org/2026/local-events/hurghada/
+- Public website: https://spaceappshurghada.com
+- Email: info@spaceappshurghada.com
+- Instagram: https://www.instagram.com/spaceappshurghada/
+- Facebook: https://www.facebook.com/spaceappshurghada
+- LinkedIn: https://www.linkedin.com/company/spaceappshurghada/
+
+### 14c.1 `POST /email/send` - `AdminOnly`
+Request:
+```json
+{
+  "subject": "Registration closes tonight",
+  "body": "This is a reminder that registration closes at 10 PM.",
+  "recipients": ["team1@example.com", "team2@example.com"],
+  "isBodyHtml": false
+}
+```
+- `subject` and `body` are required.
+- `recipients` is required; at least one valid email address.
+- `isBodyHtml` defaults to `false`. With `false`, the body is treated as plain
+  text and line breaks/HTML characters are escaped. With `true`, the body is
+  inserted as HTML inside the branded wrapper (Admin-only input).
+
+`200`:
+```json
+{
+  "requestedRecipients": 3,
+  "uniqueRecipients": 2,
+  "sent": 2,
+  "failed": 0,
+  "invalidRecipients": ["not-an-email"],
+  "failures": []
+}
+```
+- `requestedRecipients` = raw array length.
+- `uniqueRecipients` = valid, deduplicated addresses attempted.
+- `sent` + `failed` = per-recipient transport results.
+- `failures` contains `{ "recipient": "...", "error": "..." }` for SMTP
+  failures. A request can return `200` with partial failures.
+
+Errors:
+- `email.not_configured` (`503`) - one or more required SMTP env vars missing
+  or invalid; message names the missing key.
+- `email.invalid` (`400`) - empty subject/body or a subject containing line breaks.
+- `email.invalid_recipients` (`400`) - no valid recipients.
+- `email.too_many_recipients` (`400`) - more unique recipients than
+  `EMAIL_MAX_RECIPIENTS`.
+
+### 14c.2 Environment variables
+Google/Gmail SMTP is the default. For a Google account only
+`EMAIL_FROM_ADDRESS` and `EMAIL_SMTP_PASSWORD` are required. Use a Google App
+Password (requires 2-Step Verification), not the normal account password.
+The SMTP username defaults to the from address.
+
+Set these on the API server (hosting panel or process environment) and restart
+the app. Do not commit real values to the repository.
+
+| Key | Required | Default | Meaning |
+|---|---:|---|---|
+| `EMAIL_FROM_ADDRESS` | Yes | - | Google account/alias used as sender |
+| `EMAIL_SMTP_PASSWORD` | Yes | - | Google App Password |
+| `EMAIL_SMTP_HOST` | No | `smtp.gmail.com` | SMTP hostname; override for custom relay |
+| `EMAIL_SMTP_PORT` | No | `587` | SMTP port |
+| `EMAIL_SMTP_USERNAME` | No | from address | SMTP login; override if different |
+| `EMAIL_FROM_NAME` | No | `NASA Space Apps Challenge Hurghada` | Sender display name |
+| `EMAIL_USE_SSL` | No | `true` | Enable STARTTLS (port 587 recommended) |
+| `EMAIL_MAX_RECIPIENTS` | No | `2000` | Max unique recipients per request |
+| `EMAIL_MAX_CONCURRENCY` | No | `4` | Concurrent SMTP sends |
+
+The built-in .NET SMTP client uses STARTTLS on port `587`; implicit SSL on port
+`465` is not supported without a different transport.
+
+If email is not configured, the rest of the API still starts normally; only
+`POST /email/send` returns `503 email.not_configured`.
 
 ---
 

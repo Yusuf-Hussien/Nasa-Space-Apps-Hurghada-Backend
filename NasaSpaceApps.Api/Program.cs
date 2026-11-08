@@ -105,6 +105,11 @@ builder.Services.AddCors(options =>
 var jwtOptions = JwtOptions.FromConfiguration(builder.Configuration);
 builder.Services.AddSingleton(jwtOptions);
 
+var emailOptions = EmailOptionsFactory.FromConfiguration(builder.Configuration);
+builder.Services.AddSingleton(emailOptions);
+builder.Services.AddScoped<IEmailTransport, SmtpEmailTransport>();
+builder.Services.AddScoped<EmailService>();
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {

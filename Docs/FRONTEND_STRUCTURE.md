@@ -108,6 +108,7 @@ src/
 | /admin/sponsors | Sponsors Management | CRUD sponsors/tiers + logos | GET/POST/PUT/DELETE /sponsors, GET/POST/PUT/DELETE /sponsors/tiers | AdminOnly, base64/data URI/URL (20MB decoded) |
 | /admin/questions | Game Questions Management | Start/stop game + CRUD + publish/unpublish | GET /game/state, POST /game/start, POST /game/stop, GET/POST/PUT/DELETE /questions, POST /questions/:questionId/publish, POST /questions/:questionId/unpublish | AdminOnly; start game first, then publish individual questions to reveal them |
 | /admin/season-media | Season Media Management | CRUD season media | GET/POST/PUT/DELETE /seasonmedia | AdminOnly |
+| /admin/email | Bulk Email | Compose subject/body and send to many recipients | POST /email/send | AdminOnly; branded footer/signature is added automatically; plain text by default, set isBodyHtml for HTML |
 | /admin/challenges | Challenges Management | Set challenge images | PATCH /challenges/:challengeId/image | AdminOnly |
 | /admin/teams | Teams Management | Set team logos | PATCH /teams/:teamId/logo | AdminOnly |
 
