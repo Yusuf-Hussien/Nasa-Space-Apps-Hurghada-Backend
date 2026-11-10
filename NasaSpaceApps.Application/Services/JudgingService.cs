@@ -14,10 +14,10 @@ public sealed class JudgingService
         _repository = repository;
     }
 
-    public async Task<Result<List<JudgingCriterion>>> GetCriteriaAsync(int? challengeId = null)
+    public async Task<Result<List<JudgingCriterion>>> GetCriteriaAsync()
     {
         return Result<List<JudgingCriterion>>.Success(
-            await _repository.GetJudgingCriteriaAsync(challengeId));
+            await _repository.GetJudgingCriteriaAsync());
     }
 
     // ---- Criteria CRUD ----
@@ -29,27 +29,12 @@ public sealed class JudgingService
             return Result<JudgingCriterion>.Failure("criterion.invalid", 400, "Criterion name is required.");
         }
 
-        if (input.MaxScore <= 0m)
-        {
-            return Result<JudgingCriterion>.Failure("criterion.invalid", 400, "Max score must be positive.");
-        }
-
-        if (input.ChallengeId.HasValue)
-        {
-            var challenge = await _repository.GetChallengeByIdAsync(input.ChallengeId.Value);
-            if (challenge is null)
-            {
-                return Result<JudgingCriterion>.Failure("challenge.not_found", 404, "Challenge not found.");
-            }
-        }
-
         var criterion = new JudgingCriterion
         {
-            ChallengeId = input.ChallengeId,
             Name = input.Name.Trim(),
             Description = string.IsNullOrWhiteSpace(input.Description) ? null : input.Description.Trim(),
-            MaxScore = input.MaxScore,
-            Weight = input.Weight,
+            MaxScore = JudgingRules.MaxScore,
+            Weight = JudgingRules.Weight,
             IsPublished = false,
             PublishedAt = null
         };
@@ -72,25 +57,10 @@ public sealed class JudgingService
             return Result<JudgingCriterion>.Failure("criterion.invalid", 400, "Criterion name is required.");
         }
 
-        if (input.MaxScore <= 0m)
-        {
-            return Result<JudgingCriterion>.Failure("criterion.invalid", 400, "Max score must be positive.");
-        }
-
-        if (input.ChallengeId.HasValue)
-        {
-            var challenge = await _repository.GetChallengeByIdAsync(input.ChallengeId.Value);
-            if (challenge is null)
-            {
-                return Result<JudgingCriterion>.Failure("challenge.not_found", 404, "Challenge not found.");
-            }
-        }
-
-        criterion.ChallengeId = input.ChallengeId;
         criterion.Name = input.Name.Trim();
         criterion.Description = string.IsNullOrWhiteSpace(input.Description) ? null : input.Description.Trim();
-        criterion.MaxScore = input.MaxScore;
-        criterion.Weight = input.Weight;
+        criterion.MaxScore = JudgingRules.MaxScore;
+        criterion.Weight = JudgingRules.Weight;
 
         await _repository.UpdateJudgingCriterionAsync(criterion);
 
@@ -120,6 +90,16 @@ public sealed class JudgingService
         foreach (var score in await _repository.GetQuestionScoresAsync(criterionId: criterionId))
         {
             await _repository.DeleteQuestionScoreAsync(score);
+        }
+
+        foreach (var score in await _repository.GetJudgeScoresForCriterionAsync(criterionId))
+        {
+            await _repository.DeleteJudgeScoreAsync(score);
+        }
+
+        foreach (var publication in await _repository.GetCriterionPublicationsAsync(criterionId: criterionId))
+        {
+            await _repository.DeleteCriterionPublicationAsync(publication);
         }
 
         foreach (var question in await _repository.GetCriterionQuestionsAsync(criterionId, activeOnly: false))
@@ -229,122 +209,107 @@ public sealed class JudgingService
         }
     }
 
-    // ---- Per-question scoring ----
+    // ---- Criterion-level scoring ----
 
-    public async Task<Result<List<QuestionScore>>> SubmitScoresAsync(
+    public async Task<Result<List<JudgeScore>>> SubmitScoresAsync(
         int teamId,
         int judgeId,
-        List<QuestionScoreInput> scores)
+        List<CriterionScoreInput> scores)
     {
         var team = await _repository.GetTeamByIdAsync(teamId);
         if (team is null)
         {
-            return Result<List<QuestionScore>>.Failure("team.not_found", 404, "The team does not exist.");
+            return Result<List<JudgeScore>>.Failure("team.not_found", 404, "The team does not exist.");
         }
 
         if (scores is null || scores.Count == 0)
         {
-            return Result<List<QuestionScore>>.Failure("judging.no_scores", 400, "At least one question score is required.");
+            return Result<List<JudgeScore>>.Failure("judging.no_scores", 400, "At least one criterion score is required.");
         }
 
-        var existingScores = await _repository.GetQuestionScoresAsync(teamId: teamId);
-        var persisted = new List<QuestionScore>();
+        if (scores.Select(item => item.CriterionId).Distinct().Count() != scores.Count)
+        {
+            return Result<List<JudgeScore>>.Failure(
+                "score.duplicate", 400, "Each criterion may only be scored once per submission.");
+        }
+
+        var criteria = new Dictionary<int, JudgingCriterion>();
 
         foreach (var item in scores)
         {
-            var criterion = await _repository.GetJudgingCriterionByIdAsync(item.CriterionId);
-            if (criterion is null)
+            if (!criteria.TryGetValue(item.CriterionId, out var criterion))
             {
-                return Result<List<QuestionScore>>.Failure("criterion.not_found", 404, $"Criterion {item.CriterionId} was not found.");
-            }
-
-            decimal maxScore;
-            string? name = item.Name;
-
-            if (item.CriterionQuestionId.HasValue)
-            {
-                var catalogueQuestion = await _repository.GetCriterionQuestionByIdAsync(item.CriterionQuestionId.Value);
-                if (catalogueQuestion is null || catalogueQuestion.CriterionId != item.CriterionId)
+                var found = await _repository.GetJudgingCriterionByIdAsync(item.CriterionId);
+                if (found is null)
                 {
-                    return Result<List<QuestionScore>>.Failure(
-                        "criterion_question.not_found", 404,
-                        $"Question {item.CriterionQuestionId} was not found on criterion {item.CriterionId}.");
+                    return Result<List<JudgeScore>>.Failure(
+                        "criterion.not_found", 404, $"Criterion {item.CriterionId} was not found.");
                 }
 
-                name = catalogueQuestion.Text;
-                maxScore = item.MaxScore ?? criterion.MaxScore;
-            }
-            else
-            {
-                maxScore = item.MaxScore ?? criterion.MaxScore;
+                criterion = found;
+                criteria[item.CriterionId] = criterion;
             }
 
-            if (maxScore <= 0m)
+            if (item.Score < JudgingRules.MinimumScore || item.Score > criterion.MaxScore)
             {
-                return Result<List<QuestionScore>>.Failure("score.invalid", 400, "Max score must be positive.");
-            }
-
-            if (!item.Skipped && (item.Score < 0m || item.Score > maxScore))
-            {
-                return Result<List<QuestionScore>>.Failure(
+                return Result<List<JudgeScore>>.Failure(
                     "score.invalid", 400,
-                    $"Score '{name ?? item.CriterionQuestionId?.ToString()}' is outside the allowed range (0-{maxScore}).");
+                    $"{criterion.Name} score must be between {JudgingRules.MinimumScore:0.0} and {criterion.MaxScore:0.0}.");
             }
+        }
 
-            var existing = QuestionScoreMatch.FindExisting(existingScores, teamId, item.CriterionId, item.CriterionQuestionId, judgeId, name);
+        var persisted = new List<JudgeScore>();
+
+        foreach (var item in scores)
+        {
+            var criterion = criteria[item.CriterionId];
+            var existing = await _repository.GetJudgeScoreAsync(teamId, judgeId, item.CriterionId);
             if (existing is not null)
             {
-                existing.CriterionQuestionId = item.CriterionQuestionId;
-                existing.QuestionName = name;
-                existing.MaxScore = maxScore;
-                existing.Score = item.Skipped ? 0m : item.Score;
-                existing.Skipped = item.Skipped;
+                existing.MaxScore = criterion.MaxScore;
+                existing.Score = item.Score;
                 existing.Comment = item.Comment;
                 existing.Timestamp = DateTime.UtcNow;
-                await _repository.UpdateQuestionScoreAsync(existing);
+                await _repository.UpdateJudgeScoreAsync(existing);
                 persisted.Add(existing);
                 continue;
             }
 
-            var score = new QuestionScore
+            var score = new JudgeScore
             {
                 TeamId = teamId,
-                CriterionId = item.CriterionId,
-                CriterionQuestionId = item.CriterionQuestionId,
-                QuestionName = name,
                 JudgeId = judgeId,
-                MaxScore = maxScore,
-                Score = item.Skipped ? 0m : item.Score,
-                Skipped = item.Skipped,
+                CriterionId = item.CriterionId,
+                MaxScore = criterion.MaxScore,
+                Score = item.Score,
                 Comment = item.Comment,
                 Timestamp = DateTime.UtcNow
             };
 
-            await _repository.AddQuestionScoreAsync(score);
-            existingScores.Add(score);
+            await _repository.AddJudgeScoreAsync(score);
             persisted.Add(score);
         }
 
-        return Result<List<QuestionScore>>.Success(persisted);
+        return Result<List<JudgeScore>>.Success(persisted);
     }
 
     /// <summary>
     /// Public scoreboard. Ranking by achieved percentage (not raw score); only
-    /// published-by-judge criteria counts are included and averaged across judges.
+    /// scores published by their judge are included and averaged across judges.
     /// </summary>
     public async Task<Result<List<TeamStanding>>> GetStandingsAsync()
     {
-        var scores = await _repository.GetAllQuestionScoresAsync();
+        var scores = await _repository.GetAllScoresAsync();
         var teams = await _repository.GetTeamsAsync();
         var publications = await _repository.GetCriterionPublicationsAsync();
         var standings = StandingsCalculator.Calculate(scores, teams, publications);
         return Result<List<TeamStanding>>.Success(standings);
     }
 
-    public async Task<Result<List<QuestionScore>>> GetScoresForTeamAsync(int teamId)
+    public async Task<Result<List<JudgeScore>>> GetScoresForTeamAsync(int teamId)
     {
-        var scores = await _repository.GetQuestionScoresAsync(teamId);
-        return Result<List<QuestionScore>>.Success(scores);
+        var scores = await _repository.GetScoresForTeamAsync(teamId);
+        return Result<List<JudgeScore>>.Success(scores);
     }
 
     public async Task<Result<List<CriterionPublication>>> GetPublicationsAsync(int? criterionId = null, int? judgeId = null)

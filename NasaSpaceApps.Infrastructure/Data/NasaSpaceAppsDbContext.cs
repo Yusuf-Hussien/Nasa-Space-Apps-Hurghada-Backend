@@ -28,6 +28,7 @@ public class NasaSpaceAppsDbContext : DbContext
     public DbSet<Sponsor> Sponsors => Set<Sponsor>();
     public DbSet<Staff> Staff => Set<Staff>();
     public DbSet<SeasonMedia> SeasonMedia => Set<SeasonMedia>();
+    public DbSet<AppMigration> AppMigrations => Set<AppMigration>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -49,6 +50,7 @@ public class NasaSpaceAppsDbContext : DbContext
         modelBuilder.Entity<Sponsor>().HasKey(sponsor => sponsor.SponsorId);
         modelBuilder.Entity<Staff>().HasKey(staff => staff.StaffId);
         modelBuilder.Entity<SeasonMedia>().HasKey(media => media.MediaId);
+        modelBuilder.Entity<AppMigration>().HasKey(migration => migration.Key);
 
         modelBuilder.Entity<Team>()
             .HasIndex(team => team.Username)
@@ -92,6 +94,14 @@ public class NasaSpaceAppsDbContext : DbContext
             .Property(score => score.Score)
             .HasPrecision(18, 2);
 
+        modelBuilder.Entity<JudgeScore>()
+            .Property(score => score.MaxScore)
+            .HasPrecision(18, 2);
+
+        modelBuilder.Entity<JudgeScore>()
+            .HasIndex(score => new { score.JudgeId, score.TeamId, score.CriterionId })
+            .IsUnique();
+
         modelBuilder.Entity<JudgingCriterion>()
             .Property(criterion => criterion.MaxScore)
             .HasPrecision(18, 2);
@@ -107,12 +117,6 @@ public class NasaSpaceAppsDbContext : DbContext
         modelBuilder.Entity<QuestionScore>()
             .Property(score => score.MaxScore)
             .HasPrecision(18, 2);
-
-        modelBuilder.Entity<JudgingCriterion>()
-            .HasOne(criterion => criterion.Challenge)
-            .WithMany(challenge => challenge.Criteria)
-            .HasForeignKey(criterion => criterion.ChallengeId)
-            .OnDelete(DeleteBehavior.SetNull);
 
         modelBuilder.Entity<CriterionQuestion>()
             .HasOne(question => question.Criterion)

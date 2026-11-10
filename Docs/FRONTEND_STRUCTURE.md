@@ -83,7 +83,7 @@ src/
 |---|---|---|---|---|
 | /staff/teams/:teamId/students | Team Roster (Staff) | Full student details | GET /teams/:teamId/students | Includes email/contact (hidden publicly) |
 | /staff/requests | Requests Management | Resolve service requests | PATCH /requests/:requestId | StaffOnly |
-| /staff/judging/scores | Per-Question Score Detail | View all scores per team | GET /judging/scores?teamId= | StaffOnly - full per-question detail |
+| /staff/judging/scores | Criterion Score Detail | View all criterion scores per team | GET /judging/scores?teamId= | StaffOnly - one row per judge + criterion |
 | /staff/attendance | Attendance Records | Filter attendance records | GET /attendance?teamId=&eventDate=&status= | StaffOnly |
 
 ### 4.4 CoreTeam Pages
@@ -95,7 +95,7 @@ src/
 | Route | Page Name | Purpose | Key APIs | Notes |
 |---|---|---|---|---|
 | /judge/dashboard | Judge Dashboard | Teams list + criteria status | GET /teams, GET /judging/criteria | See which criteria published by self (isPublishedByCaller) |
-| /judge/teams/:teamId/score | Team Scoring Interface | Score per question, add ad-hoc, skip, publish | GET /judging/criteria, POST /judging/scores, POST /judging/criteria/:criterionId/publish | Upsert on resubmit; publish own scores only |
+| /judge/teams/:teamId/score | Team Scoring Interface | One 1.0-5.0 score + optional comment per global criterion, then publish | GET /judging/criteria, POST /judging/scores, POST /judging/criteria/:criterionId/publish | Upsert on resubmit; publish own scores only; no per-question/ad-hoc/skip |
 | /judge/my-publications | My Publications | Track published criteria | GET /judging/criteria | Check isPublishedByCaller and publishedJudgeCount |
 
 ### 4.6 Admin Pages
@@ -103,7 +103,7 @@ src/
 |---|---|---|---|---|
 | /admin/dashboard | Admin Overview | Quick stats/overview | Aggregate endpoints | AdminOnly |
 | /admin/staff | Staff Management | CRUD staff, roles, member types | GET/POST/PUT/DELETE /staff, GET /staff/member-types | AdminOnly, judge auto-linked on create/update to Judge |
-| /admin/criteria | Criteria Management | CRUD criteria + article questions | GET/POST/PUT/DELETE /judging/criteria | AdminOnly |
+| /admin/criteria | Criteria Management | CRUD global criteria + optional reference prompts | GET/POST/PUT/DELETE /judging/criteria | AdminOnly; maxScore/weight locked at 5/20 |
 | /admin/criteria/publish | Publish Management | Force-publish/target judges | GET /judging/criteria, POST /judging/criteria/:criterionId/publish?judgeId=, GET /judging/scores?teamId= | AdminOnly - omit judgeId to force-publish all judges with scores |
 | /admin/sponsors | Sponsors Management | CRUD sponsors/tiers + logos | GET/POST/PUT/DELETE /sponsors, GET/POST/PUT/DELETE /sponsors/tiers | AdminOnly, base64/data URI/URL (20MB decoded) |
 | /admin/questions | Game Questions Management | Start/stop game + CRUD + publish/unpublish | GET /game/state, POST /game/start, POST /game/stop, GET/POST/PUT/DELETE /questions, POST /questions/:questionId/publish, POST /questions/:questionId/unpublish | AdminOnly; start game first, then publish individual questions to reveal them |
@@ -122,14 +122,16 @@ src/
 ---
 
 ## 5) Judging Model (Frontend Must Follow)
+- **Global criteria:** The same five criteria apply to every team: Impact, Creativity, Validity, Relevance, Presentation. Criteria are not challenge-scoped.
+- **Criterion-level only:** One decimal score from 1.0 to 5.0 plus an optional comment per criterion. No question-level, ad-hoc, or skip controls.
+- **Reference prompts:** `questions` are optional reading guidance only and are never scored.
 - **Per-judge publish:** Each judge publishes their own criterion scores independently.
 - **Averaging:** Standings average scores across judges who published (achieved/available per criterion averaged, summed).
 - **Visibility:** Unpublished judges' scores do not appear until published.
-- **Upsert:** Resubmitting POST /judging/scores replaces the same judge+team+question.
-- **Skip:** Skipped questions excluded only for that judge.
-- **Ad-hoc:** criterionQuestionId: null, name optional, maxScore required/explicit.
+- **Upsert:** Resubmitting POST /judging/scores replaces the same judge+team+criterion.
 - **Transparency:** Display judgesCounted per entry and per criterion; show isPublishedByCaller/publishedJudgeCount.
 - **Publishing:** Judges use POST /judging/criteria/:id/publish (own). Admin may omit judgeId (force all with scores) or pass ?judgeId=N.
+- **Weight:** Weight is display-only and does not change ranking.
 
 ---
 

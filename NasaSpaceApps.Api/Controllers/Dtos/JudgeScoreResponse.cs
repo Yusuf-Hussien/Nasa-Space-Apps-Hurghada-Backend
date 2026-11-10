@@ -9,6 +9,7 @@ public sealed record JudgeScoreResponse(
     int? JudgeId,
     int CriterionId,
     string? CriterionName,
+    decimal MaxScore,
     decimal Score,
     string? Comment,
     DateTime? Timestamp)
@@ -20,6 +21,7 @@ public sealed record JudgeScoreResponse(
             JudgeId: includeJudge ? score.JudgeId : null,
             CriterionId: score.CriterionId,
             CriterionName: score.Criterion?.Name,
+            MaxScore: score.MaxScore,
             Score: score.Score,
             Comment: score.Comment,
             Timestamp: score.Timestamp);

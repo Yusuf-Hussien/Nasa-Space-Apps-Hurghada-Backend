@@ -6,7 +6,6 @@ public sealed record JudgingCriterionInput(
     string? Description,
     decimal MaxScore,
     decimal Weight,
-    int? ChallengeId = null,
     List<CriterionQuestionInput>? Questions = null);
 
 /// <summary>An article/reference question attached to a criterion.</summary>

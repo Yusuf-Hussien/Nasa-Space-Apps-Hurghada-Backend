@@ -251,13 +251,13 @@ frontend and mobile teams lives in [`Docs/API_CONTRACT.md`](Docs/API_CONTRACT.md
 | `POST` | `/attendance` | Record attendance |
 | `GET` | `/requests` | Filter service requests |
 | `POST` | `/requests` | Create a service request |
-| `GET` | `/judging/criteria` | List judging criteria + article questions (filter by `challengeId`) |
-| `POST` | `/judging/criteria` | Create a criterion (Admin) |
+| `GET` | `/judging/criteria` | List the five global criteria + optional reference prompts |
+| `POST` | `/judging/criteria` | Create a criterion (Admin; maxScore/weight locked at 5/20) |
 | `POST` | `/judging/criteria/{id}/publish` | Publish own scores (Judge) or force-publish (Admin) |
 | `POST` | `/judging/criteria/{id}/unpublish` | Withdraw published scores (Judge/Admin) |
 | `GET` | `/judging/standings` | Public scoreboard (averaged across published judges) |
-| `POST` | `/judging/scores` | Submit per-question judge scores (upsert) |
-| `GET` | `/judging/scores?teamId=` | Per-question score detail (Staff) |
+| `POST` | `/judging/scores` | Submit one 1.0-5.0 score per criterion (upsert) |
+| `GET` | `/judging/scores?teamId=` | Criterion-level score detail (Staff) |
 | `GET` | `/game/state` | Public competition start/stop state |
 | `POST` | `/game/start` | Start the competition (Admin) |
 | `POST` | `/game/stop` | Stop the competition (Admin) |
@@ -283,7 +283,7 @@ Authorization is a policy check against the JWT `role` claim. Every request carr
 |---|---|
 | `Admin` | Full staff access, including staff management, sponsors, and questions |
 | `CoreTeam` | Organizers/mentors/developers/media; runs attendance and day-to-day operations |
-| `Judge` | Scores teams against the judging criteria's article questions; publishes their own scores to the board |
+| `Judge` | Scores teams on each global criterion from 1.0 to 5.0; publishes their own scores to the board |
 | `Participant` | A team; submits answers and service requests for its own team only |
 
 `CoreTeam` members also carry a `memberType` (`Organizer`, `Mentor`, `Developer`, `Marketing`, `PR`, `Media`, `Highboard`). This is descriptive metadata only and does **not** grant distinct permissions.
@@ -371,7 +371,7 @@ Any authenticated role:
 | Resolve service requests | Yes | Yes | Yes | No |
 | Take attendance (check-in screen) | No | Yes | No | No |
 | List attendance records | Yes | Yes | Yes | No |
-| Submit judge scores (per question) | No | No | Yes | No |
+| Submit judge scores (per criterion) | No | No | Yes | No |
 | List judging criteria | Yes | Yes | Yes | Yes |
 | Manage judging criteria | Yes | No | No | No |
 | Publish / unpublish own scores | No | No | Yes | No |
@@ -392,7 +392,7 @@ Any authenticated role:
 ### Notes and known gaps
 
 - `CoreTeam` members' `memberType` does not affect authorization.
-- `GET /api/v1/judging/criteria` and `GET /api/v1/judging/standings` are public; criterion CRUD and per-question score detail require a role. Judges publish their own scores; only Admins may force-publish or target another judge. Scores are averaged across published judges.
+- `GET /api/v1/judging/criteria` and `GET /api/v1/judging/standings` are public; criterion CRUD and criterion-level score detail require a role. Judges publish their own scores; only Admins may force-publish or target another judge. Scores are averaged across published judges.
 - `GET /api/v1/teams/{id}` is public but hides the team `username` from non-staff callers.
 - `Admin` cannot access the attendance check-in screen (`/attendance/teams`, `POST /attendance`), which is restricted to `CoreTeam`.
 - `Judge` currently shares the full `StaffOnly` surface (requests, rosters, attendance) in addition to scoring.
@@ -405,8 +405,8 @@ On an empty database, startup creates sample records including:
 - Mars Habitat Challenge
 - Teams `orion` and `atlas`
 - Sample students and projects
-- A judge and three challenge-scoped judging criteria (Team Work, Challenge Relevance, Technologies Used) with article questions
-- Sample per-question scores published by the seeded judge
+- A judge and the five global judging criteria (Impact, Creativity, Validity, Relevance, Presentation) with no default reference prompts
+- Sample 1.0-5.0 criterion scores published by the seeded judge
 - A sponsor and sponsor tier
 
 Change or remove these credentials before using a shared or production database.

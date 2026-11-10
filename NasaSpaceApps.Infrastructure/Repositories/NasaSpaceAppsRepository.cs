@@ -225,18 +225,10 @@ public sealed class NasaSpaceAppsRepository : INasaSpaceAppsRepository
     public async Task<List<JudgeScore>> GetAllScoresAsync() =>
         await _context.JudgeScores.Include(score => score.Criterion).ToListAsync();
 
-    public async Task<List<JudgingCriterion>> GetJudgingCriteriaAsync(int? challengeId = null)
+    public async Task<List<JudgingCriterion>> GetJudgingCriteriaAsync()
     {
-        var query = _context.JudgingCriteria
+        return await _context.JudgingCriteria
             .Include(criterion => criterion.Questions)
-            .AsQueryable();
-
-        if (challengeId.HasValue)
-        {
-            query = query.Where(criterion => criterion.ChallengeId == challengeId.Value);
-        }
-
-        return await query
             .OrderBy(criterion => criterion.CriterionId)
             .ToListAsync();
     }
@@ -267,9 +259,34 @@ public sealed class NasaSpaceAppsRepository : INasaSpaceAppsRepository
         await _context.SaveChangesAsync();
     }
 
+    public async Task<JudgeScore?> GetJudgeScoreAsync(int teamId, int judgeId, int criterionId) =>
+        await _context.JudgeScores
+            .Include(score => score.Criterion)
+            .FirstOrDefaultAsync(score =>
+                score.TeamId == teamId &&
+                score.JudgeId == judgeId &&
+                score.CriterionId == criterionId);
+
+    public async Task<List<JudgeScore>> GetJudgeScoresForCriterionAsync(int criterionId) =>
+        await _context.JudgeScores
+            .Where(score => score.CriterionId == criterionId)
+            .ToListAsync();
+
     public async Task AddJudgeScoreAsync(JudgeScore score)
     {
         _context.JudgeScores.Add(score);
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task UpdateJudgeScoreAsync(JudgeScore score)
+    {
+        _context.JudgeScores.Update(score);
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task DeleteJudgeScoreAsync(JudgeScore score)
+    {
+        _context.JudgeScores.Remove(score);
         await _context.SaveChangesAsync();
     }
 
@@ -415,7 +432,7 @@ public sealed class NasaSpaceAppsRepository : INasaSpaceAppsRepository
     }
 
     public async Task<List<int>> GetJudgeIdsWithScoresForCriterionAsync(int criterionId) =>
-        await _context.QuestionScores
+        await _context.JudgeScores
             .Where(score => score.CriterionId == criterionId)
             .Select(score => score.JudgeId)
             .Distinct()

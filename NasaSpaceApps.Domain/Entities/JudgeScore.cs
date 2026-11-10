@@ -9,6 +9,7 @@ public class JudgeScore
     public Judge? Judge { get; set; }
     public int CriterionId { get; set; }
     public JudgingCriterion? Criterion { get; set; }
+    public decimal MaxScore { get; set; } = 5m;
     public decimal Score { get; set; }
     public string? Comment { get; set; }
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;

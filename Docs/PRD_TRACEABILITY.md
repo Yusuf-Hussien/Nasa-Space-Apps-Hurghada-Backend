@@ -21,8 +21,8 @@ but not described in the PRD.
 | §8.2 / FR-04 | Judges search teams by id / username | `GET /teams?search=` (matches `teamId`, name, username) |
 | §8.3 / §14.2 / FR-07 | Attendance per student by team; Present/Late/Absent; date + timestamp + actor | `GET /attendance/teams`, `POST /attendance`, `AttendanceStatuses`, `markedBy` |
 | §9.2 / FR-06 | Requests created on mobile appear for organizers with status | `POST /requests` + `RequestsHub` group `Organizers`; `GET`/`PATCH /requests` |
-| §8.2 / FR-05 | Judges submit scores against criteria; range validation; judge id + timestamp | `POST /judging/scores` (judgeId from token), upsert, `criterion.not_found`, `score.invalid`, `QuestionScore.Timestamp` (per question) |
-| §8.2 | Challenge-scoped criteria with article/reference questions judges read | `JudgingCriterion.ChallengeId` + `CriterionQuestion`; `GET /judging/criteria?challengeId=` |
+| §8.2 / FR-05 | Judges submit scores against criteria; range validation; judge id + timestamp | `POST /judging/scores` (judgeId from token), one `JudgeScore` per criterion, upsert on `(JudgeId, TeamId, CriterionId)`, `criterion.not_found`, `score.invalid`, `score.duplicate`, `JudgeScore.Timestamp` |
+| §8.2 | Global criteria with optional reference prompts judges read | Five global `JudgingCriterion` rows (Impact, Creativity, Validity, Relevance, Presentation) + optional `CriterionQuestion`; `GET /judging/criteria` |
 | §8.4 / FR-08 / §14.3 | Real-time standings board, public | `GET /judging/standings` (averaged across published judges, percentage-ranked) + `JudgingHub` `StandingsUpdated` |
 | §9.4 / FR-11 / FR-12 | Sponsor tiers + Tier 1 banner config | `SponsorTier.BannerEnabled` / `Priority`, `GET /sponsors` |
 | §9.3 / FR-09 / FR-10 | Questions persisted per challenge; participation tracked | `Question` (challengeId, publish, correctAnswer, points), `GameParticipation`, `answer.already_submitted` |
@@ -37,13 +37,13 @@ but not described in the PRD.
 
 | # | PRD reference | What the PRD says | What the code does | Impact |
 | --- | --- | --- | --- | --- |
-| D1 | §11, §18 | Scoring model has configurable `Weight` per criterion | `JudgingCriterion.Weight` is stored but **ignored**: `StandingsCalculator` ranks by **achieved percentage** (`earned/possible`), not by raw sum | **Superseded** - percentage ranking is fair across differently-sized challenges; `Weight` is vestigial |
+| D1 | §11, §18 | Scoring model has configurable `Weight` per criterion | `JudgingCriterion.Weight` is stored (locked at `20`) but **ignored**: `StandingsCalculator` ranks by **achieved percentage** (`earned/possible`), not by weighted sum | **Superseded** - percentage ranking is fair across uneven judge coverage; `Weight` is display-only |
 | D2 | §9.3 | Prize-game winner rule must be explicit/configurable, "not hard-coded" | Winner ordering is **hard-coded** in `GameService.GetLeaderboardAsync` (points desc → correct-count desc → name) | Cannot configure winner rule without a code change |
 | D3 | §9.1 | Team logs in with its **unique username** + password | Login used numeric `teamId` + password | **Fixed in this change** - now username + password (see §7) |
 | D4 | §8.3 | Request status set: Pending, Accepted/In Progress, Resolved, Cancelled | `Pending` on create; resolve accepts `In Progress`, `Resolved`, `Rejected`, `Done`, `Cancelled` (`Done`→`Resolved`, `Cancelled`→`Rejected`). No `Accepted` | Clients must map `Accepted` → `In Progress` |
 | D5 | §8.4 / §18 | Tie-breaking rules must be explicit/configurable | Ties are detected (`isTied`, competition ranking) but there is **no tie-break rule** | Tied teams share a rank |
 | D6 | §13 | "database migrations" | Schema is raw `IF NOT EXISTS` SQL in `DbInitializer.SqlSchemaScript`, not EF migrations | No migration history; drift risk |
-| D7 | §18 (open) | Should standings show only totals or also criterion scores? | Public board returns **overall percentage + total earned/possible + per-criterion totals**; per-question detail stays `StaffOnly` | Decision made explicitly; internal question scores never exposed publicly |
+| D7 | §18 (open) | Should standings show only totals or also criterion scores? | Public board returns **overall percentage + total earned/possible + per-criterion totals**; criterion-level detail stays `StaffOnly` | Decision made explicitly; raw judge comments and unpublished scores are never exposed publicly |
 | D8 | §18 (open) | Should organizers and mentors be separate roles? | Mentor is modelled as `CoreTeam` + `memberType="Mentor"`, not a role | MemberType grants no extra permissions |
 
 ---
@@ -77,7 +77,7 @@ but not described in the PRD.
 | E7 | Role-stripped responses (teams hide `username` from non-staff; questions hide `correctAnswer` from participants) | DTO `From()` mappers |
 | E8 | Team detail now includes full team + challenge + roster on participant login | This change (see §7) |
 | E9 | Base64 image fields + public season-media CRUD | Earlier change (see §7) |
-| E10 | Article-based judging: challenge-scoped criteria, `CriterionQuestion` bank, per-question scoring, ad-hoc "other" questions, skip, **per-judge publish**, upsert, **averaged across published judges**, percentage-ranked public board | This change (see §7) |
+| E10 | Global criterion judging: five fixed criteria, one 1.0-5.0 score per criterion, optional reference prompts, **per-judge publish**, upsert, **averaged across published judges**, percentage-ranked public board | This change (see §7) |
 | E11 | Public enriched team detail (challenge + project + student names, staff-only `username`) | This change (see §7) |
 
 ---
@@ -114,13 +114,15 @@ but not described in the PRD.
   - New routes: `PATCH /teams/{id}/logo`, `PATCH /challenges/{id}/image`, `POST`/`PUT`/`DELETE /seasonmedia`.
   - New error codes: `image.too_large`, `image.invalid_base64`, `image.invalid_type`, `season_media.not_found`, `season_media.invalid`.
    - Partially closes M3 (public season media); adds extra E9.
-- **Article-based judging redesign.**
-  - `JudgingCriterion` is now **challenge-scoped** (`ChallengeId`) with `IsPublished`/`PublishedAt`; new `CriterionQuestion` holds article/reference prompts (no answers, no auto-grading).
-  - Judges score each question per team; new `QuestionScore` (per-question, ad-hoc "other" questions, `Skipped`, `MaxScore`, `Comment`). **Upsert** prevents duplicate rows on re-submission.
-  - Each **judge publishes their own** criterion scores via `POST /judging/criteria/{id}/publish`; an **Admin** may force-publish all judges or target one judge. Only published-by-judge scores count and are **averaged across published judges**; a skip excludes only that judge's contribution.
-  - **Standings rank by achieved percentage** (`earned/possible`), exposing criterion totals + `judgesCounted` only - per-question detail stays `StaffOnly`. Supersedes D1; resolves D7.
+- **Criterion-level judging redesign (2026).**
+  - The five criteria are **global** (Impact, Creativity, Validity, Relevance, Presentation); `ChallengeId` was removed from `JudgingCriterion` and challenge criteria navigation.
+  - Judges give exactly one decimal score from **1.0 to 5.0** per criterion per team, with an optional comment. `JudgeScore.MaxScore` snapshots the criterion maximum. No question-level, ad-hoc, or skip scoring remains; `QuestionScores` is legacy only.
+  - `CriterionQuestion` remains as an optional reference-prompt bank. It is never scored and may be empty.
+  - Each **judge publishes their own** criterion scores via `POST /judging/criteria/{id}/publish`; an **Admin** may force-publish all judges or target one judge. Only published-by-judge scores count and are **averaged across published judges**.
+  - **Standings rank by achieved percentage** (`earned/possible`), exposing criterion totals + `judgesCounted` only; criterion-level detail stays `StaffOnly`. Supersedes D1; resolves D7.
   - New routes: `GET/POST/PUT/DELETE /judging/criteria`, `POST /judging/criteria/{id}/publish|unpublish` (JudgeOrAdmin), reshaped `POST /judging/scores`, `GET /judging/scores`.
-  - New error codes: `criterion.invalid`, `criterion_question.not_found`, `judging.not_allowed`.
+  - New error codes: `criterion.invalid`, `score.duplicate`, `judging.not_allowed`.
+  - One-time startup migration `2026-criterion-judging-v1` clears old criteria/publications/scores and seeds the five global criteria.
   - Closes M1 and M2 and largely closes M9.
 - **Public enriched team detail.**
   - `GET /teams/{teamId}` is now public and returns the full challenge, the project (title/description/repository/demo), and students as **names only** (no email/contact); `username` is hidden from non-staff.

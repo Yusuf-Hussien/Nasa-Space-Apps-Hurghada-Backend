@@ -2,4 +2,4 @@ using NasaSpaceApps.Application.Models;
 
 namespace NasaSpaceApps.Api.Controllers;
 
-public sealed record SubmitScoresRequest(int TeamId, List<QuestionScoreInput> Scores);
+public sealed record SubmitScoresRequest(int TeamId, List<CriterionScoreInput> Scores);

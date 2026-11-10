@@ -61,9 +61,10 @@ DELETE /api/v1/questions/{id}   [Admin] (soft)
 POST /api/v1/questions/{id}/answer  [Participant] → { correct, points, submittedAt }
 GET  /api/v1/game/leaderboard        [anonymous — side trophy board]
 
-POST /api/v1/judging/scores      [Judge]  judgeId from token
-GET  /api/v1/judging/criteria    [authenticated]
-GET  /api/v1/judging/scores?teamId=  [Judge/Admin]
+POST /api/v1/judging/scores      [Judge]  one 1.0-5.0 score per global criterion; judgeId from token
+GET  /api/v1/judging/criteria    [public] global criteria + optional reference prompts
+GET  /api/v1/judging/standings   [public] percentage-ranked, published judges only
+GET  /api/v1/judging/scores?teamId=  [Staff] criterion-level detail
 
 POST /api/v1/requests           [Participant — teamId from token]
 GET  /api/v1/requests           [Staff all / Participant own team]

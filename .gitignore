@@ -3,6 +3,7 @@
 [Oo]bj/
 .vs/
 TestResults/
+media/
 
 # User-specific IDE files
 *.user

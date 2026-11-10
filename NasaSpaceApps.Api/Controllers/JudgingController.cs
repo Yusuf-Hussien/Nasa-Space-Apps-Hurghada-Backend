@@ -27,12 +27,12 @@ public class JudgingController : ControllerBase
         _hubContext = hubContext;
     }
 
-    /// <summary>List judging criteria (with their article/reference questions), optionally by challenge.</summary>
+    /// <summary>List the global judging criteria and their optional reference questions.</summary>
     [AllowAnonymous]
     [HttpGet("criteria")]
-    public async Task<ActionResult<List<JudgingCriterionResponse>>> GetCriteria([FromQuery] int? challengeId = null)
+    public async Task<ActionResult<List<JudgingCriterionResponse>>> GetCriteria()
     {
-        var criteriaResult = await _judgingService.GetCriteriaAsync(challengeId);
+        var criteriaResult = await _judgingService.GetCriteriaAsync();
         if (!criteriaResult.IsSuccess)
         {
             return criteriaResult.ToHttpResult(this, items => items.Select(JudgingCriterionResponse.From).ToList());
@@ -113,14 +113,13 @@ public class JudgingController : ControllerBase
     }
 
     /// <summary>
-    /// Submit per-question scores for a team. The judgeId comes from the token,
-    /// never the body. Ad-hoc questions are allowed when criterionQuestionId is null.
-    /// Re-submitting the same judge+team+question replaces the previous score.
-    /// Broadcasts updated standings via SignalR.
+    /// Submit one 1.0-5.0 score per criterion for a team. The judgeId comes from
+    /// the token, never the body. Re-submitting the same judge+team+criterion
+    /// replaces the previous score. Broadcasts updated standings via SignalR.
     /// </summary>
     [Authorize(Policy = "JudgeOnly")]
     [HttpPost("scores")]
-    public async Task<ActionResult<List<QuestionScoreResponse>>> SubmitScores([FromBody] SubmitScoresRequest request)
+    public async Task<ActionResult<List<JudgeScoreResponse>>> SubmitScores([FromBody] SubmitScoresRequest request)
     {
         var judgeId = _currentUser.JudgeId;
         if (!judgeId.HasValue)
@@ -130,7 +129,7 @@ public class JudgingController : ControllerBase
 
         var result = await _judgingService.SubmitScoresAsync(request.TeamId, judgeId.Value, request.Scores);
         var submitted = result.IsSuccess
-            ? result.Value!.Select(QuestionScoreResponse.From).ToList()
+            ? result.Value!.Select(score => JudgeScoreResponse.From(score)).ToList()
             : null;
 
         var httpResult = result.ToHttpResult(this, _ => submitted!);
@@ -149,10 +148,10 @@ public class JudgingController : ControllerBase
 
     [Authorize(Policy = "StaffOnly")]
     [HttpGet("scores")]
-    public async Task<ActionResult<List<QuestionScoreResponse>>> GetScores([FromQuery] int teamId)
+    public async Task<ActionResult<List<JudgeScoreResponse>>> GetScores([FromQuery] int teamId)
     {
         var result = await _judgingService.GetScoresForTeamAsync(teamId);
-        return result.ToHttpResult(this, scores => scores.Select(QuestionScoreResponse.From).ToList());
+        return result.ToHttpResult(this, scores => scores.Select(score => JudgeScoreResponse.From(score)).ToList());
     }
 
     private async Task BroadcastStandingsAsync()

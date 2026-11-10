@@ -3,8 +3,6 @@ namespace NasaSpaceApps.Domain.Entities;
 public class JudgingCriterion
 {
     public int CriterionId { get; set; }
-    public int? ChallengeId { get; set; }
-    public Challenge? Challenge { get; set; }
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
     public decimal MaxScore { get; set; }

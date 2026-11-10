@@ -27,12 +27,16 @@ public interface INasaSpaceAppsRepository
     Task<List<Attendance>> GetAttendancesAsync(int? teamId, DateTime? eventDate, string? status);
     Task<List<JudgeScore>> GetScoresForTeamAsync(int teamId);
     Task<List<JudgeScore>> GetAllScoresAsync();
-    Task<List<JudgingCriterion>> GetJudgingCriteriaAsync(int? challengeId = null);
+    Task<List<JudgingCriterion>> GetJudgingCriteriaAsync();
     Task<JudgingCriterion?> GetJudgingCriterionByIdAsync(int criterionId);
     Task<JudgingCriterion> AddJudgingCriterionAsync(JudgingCriterion criterion);
     Task UpdateJudgingCriterionAsync(JudgingCriterion criterion);
     Task DeleteJudgingCriterionAsync(JudgingCriterion criterion);
+    Task<JudgeScore?> GetJudgeScoreAsync(int teamId, int judgeId, int criterionId);
+    Task<List<JudgeScore>> GetJudgeScoresForCriterionAsync(int criterionId);
     Task AddJudgeScoreAsync(JudgeScore score);
+    Task UpdateJudgeScoreAsync(JudgeScore score);
+    Task DeleteJudgeScoreAsync(JudgeScore score);
 
     // Criterion questions (article/reference prompts)
     Task<List<CriterionQuestion>> GetCriterionQuestionsAsync(int criterionId, bool activeOnly = true);

@@ -1,27 +1,36 @@
 # Judging Process Guide
 
 This guide explains how judging works at a NASA Space Apps event on this
-platform. It is written for organizers, mentors, and judges — no technical
+platform. It is written for organizers, mentors, and judges - no technical
 knowledge required.
 
 ---
 
 ## 1. The big picture
 
-Teams build a project for a **challenge**. To decide a winner, each challenge has
-a set of **criteria** (for example *Innovation*, *Technical Execution*, and
-*Impact*). Each criterion holds a short list of **questions** that a judge reads
-while looking at the team's work and then scores.
+Every team is judged against the same five **global criteria**:
 
-Nothing is automatically graded in judging. The judge reviews the team's project
-and judges it question by question, awarding points up to a maximum.
+1. **Impact**
+2. **Creativity**
+3. **Validity**
+4. **Relevance**
+5. **Presentation**
+
+A judge gives each team **one score per criterion**, from **1.0 to 5.0**.
+Decimals are allowed. Nothing is automatically graded.
 
 ```
-Challenge
-  └── Criterion  (e.g. "Innovation")
-        ├── Question 1  -> judge gives a score
-        └── Question 2  -> judge gives a score
+Global criteria
+  - Impact       -> one score per team
+  - Creativity   -> one score per team
+  - Validity     -> one score per team
+  - Relevance    -> one score per team
+  - Presentation -> one score per team
 ```
+
+Criteria are not tied to a challenge. Judges may optionally read reference
+prompts under a criterion, but those prompts are guidance only and are never
+scored.
 
 ---
 
@@ -29,36 +38,28 @@ Challenge
 
 | Role | What they do |
 |---|---|
-| **Admin** | Sets up the criteria and the questions inside them |
-| **CoreTeam** (organizers) | Runs the event; can also publish results and read detailed scores |
-| **Judge** | Reads each team's work and submits scores |
+| **Admin** | Manages criteria, optional reference prompts, and can publish on a judge's behalf |
+| **CoreTeam** (organizers) | Runs the event; can read detailed scores |
+| **Judge** | Reviews teams and submits one score per criterion |
 | **Team (Participant)** | Builds the project; can see the public scoreboard |
 
-Only a **Judge** can submit scores. Only **Admin** can create or edit criteria
-and questions. **Admin** and **CoreTeam** together can publish a criterion to the
-live board.
+Only a **Judge** can submit scores. Each judge submits and publishes their own
+scores. An **Admin** can force-publish or target a specific judge.
 
 ---
 
 ## 3. Setting up the judging form
 
-Before the event (or judging round), an **Admin**:
+On a fresh event the platform seeds the five criteria automatically, with a
+maximum score of **5** for each. An **Admin** can:
 
-1. Creates a criterion for the challenge and gives it a name, a short
-   description, and a maximum score.
-2. Adds the questions that belong to that criterion. Each question is just a
-   prompt to guide the judge — for example *"How original is the concept?"*.
-   There are no right or wrong answers; judges award points.
-3. Repeats until every criterion has the questions they want.
+1. Edit a criterion's name and description.
+2. Add optional reference prompts to guide judges. These are not scored and may
+   be left empty.
+3. Reorder or remove reference prompts.
 
-Example setup:
-
-| Criterion | Question |
-|---|---|
-| Innovation | How original is the concept? |
-| Innovation | Does the team clearly state the problem? |
-| Technical Execution | Does the prototype actually work? |
-| Impact | Who benefits, and how big is the impact? |
+The maximum score and weight are locked at **5** and **20**. Weight is shown for
+reference only and does not change the standings.
 
 ---
 
@@ -67,104 +68,58 @@ Example setup:
 For each team, a judge:
 
 1. Opens the team and reviews the project.
-2. Goes through the criterion's questions one by one.
-3. Gives each question a score, from **0 up to that question's maximum**.
-4. Can leave a short **comment** for extra context.
+2. Gives **one score from 1.0 to 5.0 for each criterion**.
+3. Optionally leaves a short comment per criterion.
 
-### Extra questions ("other")
+There are no question-level scores, ad-hoc scores, or skips. Every criterion
+receives exactly one score per judge per team.
 
-Sometimes a team does something worth noting that no catalogue question covers.
-A judge can add an **ad-hoc question** on the spot: give it a name (optional), a
-maximum score, and a score. It counts toward the result just like a normal
-question.
+### Re-scoring
 
-### Skipping a question
-
-If a question simply does not apply to a team, the judge can **skip** it. A
-skipped question counts **neither for nor against** the team — it is removed from
-both the points they earned and the points that were possible. This keeps teams
-from being penalized for something that was never relevant to them.
+If a judge submits again for the same team and criterion, the new score
+**replaces** the old one. Judges can update their scores until they publish.
 
 ---
 
-## 5. Publishing results
+## 5. Publishing and the live scoreboard
 
-Judging happens quietly first. Each judge's scores stay hidden until **that
-judge publishes** the criterion. Once a judge publishes, their scores appear
-on the live scoreboard and are combined with every other judge who has
-published.
+Submitting a score does **not** immediately put it on the public board. A judge
+must **publish** the criterion's scores:
 
-- **Each judge publishes independently.** You don't need to wait for the whole
-  panel to publish a criterion for *your* scores to show up.
-- **Averages across published judges.** If two judges publish, the board shows
-  the average of their two scores for each team (not the sum). This keeps
-  results fair even if judges scored differently.
-- **Only published judges count.** An unpublished judge's scores are hidden
-  until they publish. The board shows how many judges contributed (`judgesCounted`)
-  so you can see if a team has been scored by the full panel or only part of it.
-- **Only Admins can force-publish.** If needed, an Admin can publish all judges
-  who have scores for a criterion (or a specific judge). Normal judges can only
-  publish their own scores.
-- **Publishing can be undone** if a mistake is found.
-- **Re-submitting replaces your old score.** If you tweak a score after already
-  submitting, resubmitting updates it (no duplicates).
+- Judges publish their **own** scores.
+- An Admin can force-publish every judge who has scored a criterion, or target a
+  specific judge.
+- Publishing is idempotent, and judges can unpublish to withdraw their scores.
 
----
+The scoreboard only counts scores whose judge has published them.
 
-## 6. How the scoreboard is ranked
+### How ranking works
 
-The scoreboard is ranked by **percentage**, not by raw points. This makes it
-fair even when challenges or criteria have different total point values.
+For each team, the board:
 
-For each team:
+1. Averages each criterion's achieved score and maximum score across the judges
+   who published that criterion.
+2. Sums the averaged criteria into a team total.
+3. Ranks teams by **achieved / available x 100**.
 
-```
-percentage = (points earned across published criteria)
-             ÷ (total points possible across those criteria)
-             × 100
-```
-
-Example:
-
-| Criteria scored | Possible | Earned | Percentage |
-|---|---|---|---|
-| Innovation | 10 | 9 | — |
-| **Total** | **10** | **9** | **90%** |
-
-A team with 90% ranks above a team with 85%, regardless of how many total points
-each challenge was worth.
-
-The public board shows only:
-
-- each team's overall percentage,
-- each team's total earned and total possible points,
-- the per-criterion totals (earned / possible).
-
-It **never** shows the individual question scores or the comments — those stay
-private to the judging panel and organizers.
+Unpublished scores are ignored. Teams with no published scores appear without a
+rank. Tied percentages share the same rank, and the board shows how many judges
+contributed.
 
 ---
 
-## 7. Frequently asked questions
+## 6. Quick checklist
 
-**Can two teams tie?**
-Yes. Ties are shown clearly on the board; organizers decide how to break them.
+**Admin**
+- [ ] Review the seeded criteria and descriptions.
+- [ ] Optionally add reference prompts.
+- [ ] Confirm judges can log in.
 
-**What if a judge forgets a question?**
-The question is simply not counted until it is scored. Organizers can review all
-scores before publishing.
+**Judge**
+- [ ] Review each team.
+- [ ] Give one 1.0-5.0 score per criterion.
+- [ ] Add comments where useful.
+- [ ] Publish your scores.
 
-**Do skipped questions lower a team's percentage?**
-No. Skipped questions are removed from both sides of the calculation, so they
-have no effect.
-
-**Can we change the criteria after teams have been scored?**
-Criteria can be edited, but the safest approach is to finalize the form before
-judging begins. Organizers should review the form in advance.
-
-**When do teams see the results?**
-Only when a criterion is published. Until then, the board shows nothing for that
-criterion.
-
-**Who can see the detailed per-question scores?**
-Only organizers and judges. The public sees percentages and totals only.
+**Everyone**
+- [ ] Watch the public standings update live.

@@ -23,6 +23,8 @@ public static class DbInitializer
 
         try
         {
+            ApplyJudgingRedesignMigration(context);
+
             if (context.Challenges.Any())
             {
                 return;
@@ -36,6 +38,97 @@ public static class DbInitializer
 
         Seed(context);
     }
+
+    private const string JudgingRedesignMigrationKey = "2026-criterion-judging-v1";
+
+    /// <summary>
+    /// One-time reset from question-level scoring to the five global criterion-level
+    /// criteria. The marker makes this safe to run on every startup.
+    /// </summary>
+    private static void ApplyJudgingRedesignMigration(NasaSpaceAppsDbContext context)
+    {
+        if (context.AppMigrations.Any(migration => migration.Key == JudgingRedesignMigrationKey))
+        {
+            return;
+        }
+
+        using var transaction = context.Database.IsRelational()
+            ? context.Database.BeginTransaction()
+            : null;
+
+        context.CriterionPublications.RemoveRange(context.CriterionPublications.ToList());
+        context.QuestionScores.RemoveRange(context.QuestionScores.ToList());
+        context.JudgeScores.RemoveRange(context.JudgeScores.ToList());
+        context.CriterionQuestions.RemoveRange(context.CriterionQuestions.ToList());
+        context.JudgingCriteria.RemoveRange(context.JudgingCriteria.ToList());
+        context.SaveChanges();
+
+        if (context.Database.IsRelational())
+        {
+            context.Database.ExecuteSqlRaw(@"
+IF EXISTS (SELECT * FROM sys.foreign_keys WHERE name = 'FK_JudgingCriteria_Challenges')
+    ALTER TABLE [JudgingCriteria] DROP CONSTRAINT [FK_JudgingCriteria_Challenges];
+IF EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('JudgingCriteria') AND name = 'ChallengeId')
+    ALTER TABLE [JudgingCriteria] DROP COLUMN [ChallengeId];
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_JudgeScores_JudgeId_TeamId_CriterionId' AND object_id = OBJECT_ID('JudgeScores'))
+    CREATE UNIQUE INDEX [IX_JudgeScores_JudgeId_TeamId_CriterionId] ON [JudgeScores]([JudgeId], [TeamId], [CriterionId]);
+");
+        }
+
+        context.JudgingCriteria.AddRange(CreateGlobalCriteria());
+        context.AppMigrations.Add(new AppMigration
+        {
+            Key = JudgingRedesignMigrationKey,
+            AppliedAt = DateTime.UtcNow
+        });
+        context.SaveChanges();
+
+        transaction?.Commit();
+    }
+
+    private static JudgingCriterion[] CreateGlobalCriteria() =>
+    [
+        new JudgingCriterion
+        {
+            Name = "Impact",
+            Description = "How significantly the project addresses a real problem and creates meaningful value for its intended users and community.",
+            MaxScore = 5m,
+            Weight = 20m,
+            IsPublished = false
+        },
+        new JudgingCriterion
+        {
+            Name = "Creativity",
+            Description = "How original and imaginative the idea is, and how distinct the solution is from existing approaches.",
+            MaxScore = 5m,
+            Weight = 20m,
+            IsPublished = false
+        },
+        new JudgingCriterion
+        {
+            Name = "Validity",
+            Description = "How well the project is grounded in evidence, sound reasoning, and a realistic, technically feasible approach.",
+            MaxScore = 5m,
+            Weight = 20m,
+            IsPublished = false
+        },
+        new JudgingCriterion
+        {
+            Name = "Relevance",
+            Description = "How directly the project responds to the challenge theme, requirements, and target context.",
+            MaxScore = 5m,
+            Weight = 20m,
+            IsPublished = false
+        },
+        new JudgingCriterion
+        {
+            Name = "Presentation",
+            Description = "How clearly and compellingly the team communicates the problem, solution, evidence, and impact.",
+            MaxScore = 5m,
+            Weight = 20m,
+            IsPublished = false
+        }
+    ];
 
     private static void Seed(NasaSpaceAppsDbContext context)
     {
@@ -71,22 +164,10 @@ public static class DbInitializer
         context.Challenges.Add(challenge);
         context.Teams.AddRange(team1, team2);
 
-        var criteria = new[]
-        {
-            new JudgingCriterion { Challenge = challenge, Name = "Team Work", MaxScore = 10m, Weight = 30m, Description = "How well the team collaborated and delivered together." },
-            new JudgingCriterion { Challenge = challenge, Name = "Challenge Relevance", MaxScore = 10m, Weight = 40m, Description = "How directly the project addresses the challenge brief." },
-            new JudgingCriterion { Challenge = challenge, Name = "Technologies Used", MaxScore = 10m, Weight = 30m, Description = "Quality and appropriateness of the technologies behind the solution." }
-        };
-
-        context.JudgingCriteria.AddRange(criteria);
-
-        context.CriterionQuestions.AddRange(
-            new CriterionQuestion { Criterion = criteria[0], Text = "Did every team member contribute, and were the roles clear?", DisplayOrder = 1 },
-            new CriterionQuestion { Criterion = criteria[0], Text = "How well did the team communicate, document, and hand over work?", DisplayOrder = 2 },
-            new CriterionQuestion { Criterion = criteria[1], Text = "Does the project clearly address the challenge brief and its target users?", DisplayOrder = 1 },
-            new CriterionQuestion { Criterion = criteria[1], Text = "Is the solution grounded in the data and methods the challenge requires?", DisplayOrder = 2 },
-            new CriterionQuestion { Criterion = criteria[2], Text = "Are the technologies used appropriate, current, and well justified for the problem?", DisplayOrder = 1 },
-            new CriterionQuestion { Criterion = criteria[2], Text = "Is the implementation solid, reproducible, and of good engineering quality?", DisplayOrder = 2 });
+        var criteria = context.JudgingCriteria
+            .OrderBy(criterion => criterion.CriterionId)
+            .Take(2)
+            .ToList();
 
         var judge = new Judge { Name = "Dr. Ada Smith", Account = "ada.smith@spaceapps.org", Role = "Judge" };
         context.Judges.Add(judge);
@@ -210,39 +291,28 @@ public static class DbInitializer
         context.Questions.AddRange(question1, question2);
         context.SaveChanges();
 
-        var team1Score1 = new JudgeScore { TeamId = team1.TeamId, JudgeId = judge.JudgeId, CriterionId = criteria[0].CriterionId, Score = 9.5m, Comment = "Strong concept" };
-        var team1Score2 = new JudgeScore { TeamId = team1.TeamId, JudgeId = judge.JudgeId, CriterionId = criteria[1].CriterionId, Score = 8.5m, Comment = "Solid execution" };
-        var team2Score1 = new JudgeScore { TeamId = team2.TeamId, JudgeId = judge.JudgeId, CriterionId = criteria[0].CriterionId, Score = 9m, Comment = "Good idea" };
-        var team2Score2 = new JudgeScore { TeamId = team2.TeamId, JudgeId = judge.JudgeId, CriterionId = criteria[1].CriterionId, Score = 7m, Comment = "Needs polish" };
+        if (criteria.Count == 2)
+        {
+            context.JudgeScores.AddRange(
+                new JudgeScore { TeamId = team1.TeamId, JudgeId = judge.JudgeId, CriterionId = criteria[0].CriterionId, MaxScore = 5m, Score = 4.5m, Comment = "Strong concept" },
+                new JudgeScore { TeamId = team1.TeamId, JudgeId = judge.JudgeId, CriterionId = criteria[1].CriterionId, MaxScore = 5m, Score = 4m, Comment = "Solid execution" },
+                new JudgeScore { TeamId = team2.TeamId, JudgeId = judge.JudgeId, CriterionId = criteria[0].CriterionId, MaxScore = 5m, Score = 4m, Comment = "Good idea" },
+                new JudgeScore { TeamId = team2.TeamId, JudgeId = judge.JudgeId, CriterionId = criteria[1].CriterionId, MaxScore = 5m, Score = 3m, Comment = "Needs polish" });
+            context.SaveChanges();
 
-        context.JudgeScores.AddRange(team1Score1, team1Score2, team2Score1, team2Score2);
-        context.SaveChanges();
+            // The seeded judge has published both criteria they scored, so the demo
+            // scoreboard is populated on first run.
+            var publishedAt = DateTime.UtcNow;
+            context.CriterionPublications.AddRange(
+                new CriterionPublication { Criterion = criteria[0], Judge = judge, PublishedAt = publishedAt },
+                new CriterionPublication { Criterion = criteria[1], Judge = judge, PublishedAt = publishedAt });
 
-        var criterionQuestions = context.CriterionQuestions.OrderBy(q => q.CriterionQuestionId).ToList();
-
-        context.QuestionScores.AddRange(
-            new QuestionScore { Team = team1, Criterion = criteria[0], CriterionQuestion = criterionQuestions[0], Judge = judge, MaxScore = 5m, Score = 4.5m, Comment = "Very original." },
-            new QuestionScore { Team = team1, Criterion = criteria[0], CriterionQuestion = criterionQuestions[1], Judge = judge, MaxScore = 5m, Score = 5m },
-            new QuestionScore { Team = team1, Criterion = criteria[1], CriterionQuestion = criterionQuestions[2], Judge = judge, MaxScore = 5m, Score = 4m },
-            new QuestionScore { Team = team1, Criterion = criteria[1], CriterionQuestion = criterionQuestions[3], Judge = judge, MaxScore = 5m, Score = 4.5m },
-            new QuestionScore { Team = team2, Criterion = criteria[0], CriterionQuestion = criterionQuestions[0], Judge = judge, MaxScore = 5m, Score = 4m },
-            new QuestionScore { Team = team2, Criterion = criteria[0], CriterionQuestion = criterionQuestions[1], Judge = judge, MaxScore = 5m, Score = 5m },
-            new QuestionScore { Team = team2, Criterion = criteria[1], CriterionQuestion = criterionQuestions[2], Judge = judge, MaxScore = 5m, Score = 3m },
-            new QuestionScore { Team = team2, Criterion = criteria[1], CriterionQuestion = criterionQuestions[3], Judge = judge, MaxScore = 5m, Score = 4m });
-        context.SaveChanges();
-
-        // The seeded judge has published both criteria they scored, so the demo
-        // scoreboard is populated on first run.
-        var publishedAt = DateTime.UtcNow;
-        context.CriterionPublications.AddRange(
-            new CriterionPublication { Criterion = criteria[0], Judge = judge, PublishedAt = publishedAt },
-            new CriterionPublication { Criterion = criteria[1], Judge = judge, PublishedAt = publishedAt });
-
-        criteria[0].IsPublished = true;
-        criteria[0].PublishedAt = publishedAt;
-        criteria[1].IsPublished = true;
-        criteria[1].PublishedAt = publishedAt;
-        context.SaveChanges();
+            criteria[0].IsPublished = true;
+            criteria[0].PublishedAt = publishedAt;
+            criteria[1].IsPublished = true;
+            criteria[1].PublishedAt = publishedAt;
+            context.SaveChanges();
+        }
     }
 
     /// <summary>
@@ -312,6 +382,13 @@ CREATE TABLE [Judges] (
     [Role] NVARCHAR(100) NULL
 );
 
+-- ============ AppMigrations ============
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'AppMigrations')
+CREATE TABLE [AppMigrations] (
+    [Key] NVARCHAR(450) NOT NULL PRIMARY KEY,
+    [AppliedAt] DATETIME2 NOT NULL
+);
+
 -- ============ Staff ============
 IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Staff')
 BEGIN
@@ -369,27 +446,23 @@ IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'JudgingCriteria')
 BEGIN
     CREATE TABLE [JudgingCriteria] (
         [CriterionId] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
-        [ChallengeId] INT NULL,
         [Name] NVARCHAR(200) NOT NULL,
         [Description] NVARCHAR(MAX) NULL,
         [MaxScore] DECIMAL(18,2) NOT NULL,
         [Weight] DECIMAL(18,2) NOT NULL,
         [IsPublished] BIT NOT NULL DEFAULT 0,
-        [PublishedAt] DATETIME2 NULL,
-        CONSTRAINT [FK_JudgingCriteria_Challenges] FOREIGN KEY ([ChallengeId]) REFERENCES [Challenges]([ChallengeId]) ON DELETE SET NULL
+        [PublishedAt] DATETIME2 NULL
     );
 END
 ELSE
 BEGIN
-    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('JudgingCriteria') AND name = 'ChallengeId')
-        ALTER TABLE [JudgingCriteria] ADD [ChallengeId] INT NULL;
     IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('JudgingCriteria') AND name = 'IsPublished')
         ALTER TABLE [JudgingCriteria] ADD [IsPublished] BIT NOT NULL DEFAULT 0;
     IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('JudgingCriteria') AND name = 'PublishedAt')
         ALTER TABLE [JudgingCriteria] ADD [PublishedAt] DATETIME2 NULL;
 END
 
--- ============ CriterionQuestions (article/reference prompts) ============
+-- ============ CriterionQuestions (optional reference prompts) ============
 IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'CriterionQuestions')
 CREATE TABLE [CriterionQuestions] (
     [CriterionQuestionId] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
@@ -400,7 +473,7 @@ CREATE TABLE [CriterionQuestions] (
     CONSTRAINT [FK_CriterionQuestions_Criteria] FOREIGN KEY ([CriterionId]) REFERENCES [JudgingCriteria]([CriterionId]) ON DELETE CASCADE
 );
 
--- ============ QuestionScores (per-question + ad-hoc + skip) ============
+-- ============ QuestionScores (legacy, retained but no longer written) ============
 IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'QuestionScores')
 CREATE TABLE [QuestionScores] (
     [QuestionScoreId] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
@@ -439,18 +512,6 @@ BEGIN
     CREATE UNIQUE INDEX [IX_CriterionPublications_CriterionId_JudgeId] ON [CriterionPublications]([CriterionId], [JudgeId]);
 END
 
--- Backfill: criteria that were published globally before the per-judge model keep
--- their results on the board by publishing every judge who scored them.
-INSERT INTO [CriterionPublications] ([CriterionId], [JudgeId], [PublishedAt])
-SELECT DISTINCT qs.[CriterionId], qs.[JudgeId], GETUTCDATE()
-FROM [QuestionScores] qs
-INNER JOIN [JudgingCriteria] c ON c.[CriterionId] = qs.[CriterionId]
-WHERE c.[IsPublished] = 1
-  AND NOT EXISTS (
-      SELECT 1 FROM [CriterionPublications] p
-      WHERE p.[CriterionId] = qs.[CriterionId] AND p.[JudgeId] = qs.[JudgeId]
-  );
-
 -- ============ JudgeScores ============
 IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'JudgeScores')
 CREATE TABLE [JudgeScores] (
@@ -458,6 +519,7 @@ CREATE TABLE [JudgeScores] (
     [TeamId] INT NOT NULL,
     [JudgeId] INT NOT NULL,
     [CriterionId] INT NOT NULL,
+    [MaxScore] DECIMAL(18,2) NOT NULL DEFAULT 5,
     [Score] DECIMAL(18,2) NOT NULL,
     [Comment] NVARCHAR(MAX) NULL,
     [Timestamp] DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
@@ -465,6 +527,11 @@ CREATE TABLE [JudgeScores] (
     CONSTRAINT [FK_JudgeScores_Judges] FOREIGN KEY ([JudgeId]) REFERENCES [Judges]([JudgeId]) ON DELETE CASCADE,
     CONSTRAINT [FK_JudgeScores_Criteria] FOREIGN KEY ([CriterionId]) REFERENCES [JudgingCriteria]([CriterionId]) ON DELETE CASCADE
 );
+ELSE
+BEGIN
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('JudgeScores') AND name = 'MaxScore')
+        ALTER TABLE [JudgeScores] ADD [MaxScore] DECIMAL(18,2) NOT NULL CONSTRAINT [DF_JudgeScores_MaxScore] DEFAULT 5;
+END
 
 -- ============ Attendances ============
 IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Attendances')

@@ -1,4 +1,4 @@
-﻿using NasaSpaceApps.Domain.Entities;
+using NasaSpaceApps.Domain.Entities;
 
 namespace NasaSpaceApps.Application.Services;
 
@@ -9,13 +9,13 @@ public sealed class TeamStanding
     public int? Rank { get; set; }
     public bool IsTied { get; set; }
 
-    /// <summary>Sum of scores awarded for published criteria (skipped questions excluded).</summary>
+    /// <summary>Sum of scores awarded for published criteria.</summary>
     public decimal AchievedScore { get; set; }
 
-    /// <summary>Sum of max scores available across published criteria (skipped questions excluded).</summary>
+    /// <summary>Sum of max scores available across published criteria.</summary>
     public decimal AvailableScore { get; set; }
 
-    /// <summary>AchievedScore / AvailableScore * 100 — the ranking key. 0 when nothing available.</summary>
+    /// <summary>AchievedScore / AvailableScore * 100 � the ranking key. 0 when nothing available.</summary>
     public decimal Percentage { get; set; }
 
     /// <summary>Per-criterion totals for published criteria.</summary>
@@ -39,18 +39,16 @@ public sealed record TeamStandingCriterionTotal(
 public static class StandingsCalculator
 {
     /// <summary>
-    /// Builds the public scoreboard from per-question scores.
+    /// Builds the public scoreboard from criterion-level scores.
     /// <para>
     /// A score only counts once its judge has <b>published</b> that criterion, so
     /// every judge can submit and publish a criterion independently. Within a
     /// criterion each judge's achieved/available totals are averaged, and the
-    /// team's totals are the sum of its criterion totals. Skipped questions are
-    /// excluded from the judge who skipped them, so a question skipped by one
-    /// judge still counts for the others.
+    /// team's totals are the sum of its criterion totals.
     /// </para>
     /// </summary>
     public static List<TeamStanding> Calculate(
-        IEnumerable<QuestionScore> scores,
+        IEnumerable<JudgeScore> scores,
         IEnumerable<Team> teams,
         IEnumerable<CriterionPublication> publications)
     {
@@ -59,7 +57,6 @@ public static class StandingsCalculator
             .ToHashSet();
 
         var visible = scores
-            .Where(score => !score.Skipped)
             .Where(score => publishedKeys.Contains((score.CriterionId, score.JudgeId)))
             .ToList();
 
@@ -137,13 +134,12 @@ public static class StandingsCalculator
     /// Builds one entry per criterion for a team, averaging the judges who
     /// published that criterion and scored this team.
     /// </summary>
-    private static List<TeamStandingCriterionTotal> BuildCriterionTotals(List<QuestionScore> teamScores) =>
+    private static List<TeamStandingCriterionTotal> BuildCriterionTotals(List<JudgeScore> teamScores) =>
         teamScores
             .GroupBy(score => score.CriterionId)
             .Select(group =>
             {
-                // One judge may have scored several questions of the same criterion;
-                // their totals are summed first, then averaged across judges.
+                // A judge has one score per criterion; totals are averaged across judges.
                 var perJudge = group
                     .GroupBy(score => score.JudgeId)
                     .Select(judgeGroup => new

@@ -5,7 +5,6 @@ namespace NasaSpaceApps.Api.Controllers;
 /// <summary>HTTP response shape for a judging criterion.</summary>
 public sealed record JudgingCriterionResponse(
     int CriterionId,
-    int? ChallengeId,
     string Name,
     string? Description,
     decimal MaxScore,
@@ -45,7 +44,6 @@ public sealed record JudgingCriterionResponse(
 
         return new(
             criterion.CriterionId,
-            criterion.ChallengeId,
             criterion.Name,
             criterion.Description,
             criterion.MaxScore,
