@@ -1005,7 +1005,7 @@ in the negotiate query for the WebSocket/SSE transport; use the standard
 
 | Hub | URL | Access |
 | --- | --- | --- |
-| Requests | `/hubs/requests` | Authenticated. Staff join group `Organizers` to receive events. |
+| Requests | `/hubs/requests` | Authenticated. Staff join group `Organizers`; participants join their team group to receive events. |
 | Judging | `/hubs/judging` | Public (anonymous allowed). |
 
 Events (server → client):
@@ -1021,6 +1021,8 @@ Events (server → client):
 `RequestsHub` client calls:
 - `JoinOrganizers()` - staff only; adds the caller to the `Organizers` group.
 - `LeaveOrganizers()`.
+- `JoinTeamGroup()` - participant only; adds the caller to their token's team group.
+- `LeaveTeamGroup()`.
 
 ---
 

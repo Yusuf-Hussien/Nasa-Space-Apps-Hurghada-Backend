@@ -66,7 +66,7 @@ public class RequestsController : ControllerBase
         var response = result.IsSuccess ? ServiceRequestResponse.From(result.Value!) : null;
         if (response is not null)
         {
-            await BroadcastAsync(RequestsHub.EventRequestCreated, response);
+            await BroadcastAsync(RequestsHub.EventRequestCreated, response, response.TeamId);
         }
 
         return result.ToHttpResult(this, _ => response!);
@@ -83,7 +83,7 @@ public class RequestsController : ControllerBase
         var response = result.IsSuccess ? ServiceRequestResponse.From(result.Value!) : null;
         if (response is not null)
         {
-            await BroadcastAsync(RequestsHub.EventRequestUpdated, response);
+            await BroadcastAsync(RequestsHub.EventRequestUpdated, response, response.TeamId);
         }
 
         return result.ToHttpResult(this, _ => response!);
@@ -97,12 +97,14 @@ public class RequestsController : ControllerBase
 
         if (result.IsSuccess)
         {
-            await BroadcastAsync(RequestsHub.EventRequestDeleted, requestId);
+            await BroadcastAsync(RequestsHub.EventRequestDeleted, requestId, result.Value!.TeamId);
         }
 
         return result.ToHttpResult(this, _ => DeletedResponse.Of(requestId));
     }
 
-    private Task BroadcastAsync(string eventName, object payload) =>
-        _hubContext.Clients.Group(RequestsHub.OrganizerGroup).SendAsync(eventName, payload);
+    private Task BroadcastAsync(string eventName, object payload, int teamId) =>
+        Task.WhenAll(
+            _hubContext.Clients.Group(RequestsHub.OrganizerGroup).SendAsync(eventName, payload),
+            _hubContext.Clients.Group(RequestsHub.TeamGroup(teamId)).SendAsync(eventName, payload));
 }

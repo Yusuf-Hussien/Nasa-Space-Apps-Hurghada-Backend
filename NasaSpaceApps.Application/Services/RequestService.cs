@@ -84,20 +84,20 @@ public sealed class RequestService
         return Result<ServiceRequest>.Success(request);
     }
 
-    public async Task<Result<bool>> DeleteRequestAsync(int requestId, int? teamId = null, bool isStaff = false)
+    public async Task<Result<ServiceRequest>> DeleteRequestAsync(int requestId, int? teamId = null, bool isStaff = false)
     {
         var request = await _repository.GetRequestByIdAsync(requestId);
         if (request is null)
         {
-            return Result<bool>.Failure("request.not_found", 404, "Request not found.");
+            return Result<ServiceRequest>.Failure("request.not_found", 404, "Request not found.");
         }
 
         if (!isStaff && teamId.HasValue && request.TeamId != teamId.Value)
         {
-            return Result<bool>.Failure("request.forbidden", 403, "You can only delete your own team's requests.");
+            return Result<ServiceRequest>.Failure("request.forbidden", 403, "You can only delete your own team's requests.");
         }
 
         await _repository.DeleteRequestAsync(request);
-        return Result<bool>.Success(true);
+        return Result<ServiceRequest>.Success(request);
     }
 }
