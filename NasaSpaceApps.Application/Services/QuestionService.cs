@@ -133,6 +133,14 @@ public sealed class QuestionService
             return Result<Question>.Failure("question.not_found", 404, "Question not found.");
         }
 
+        if (publish && string.Equals(question.Type, "reference", StringComparison.OrdinalIgnoreCase))
+        {
+            return Result<Question>.Failure(
+                "question.reference_not_publishable",
+                400,
+                "Reference questions cannot be published.");
+        }
+
         question.IsPublished = publish;
         question.PublishedAt = publish ? DateTime.UtcNow : null;
 

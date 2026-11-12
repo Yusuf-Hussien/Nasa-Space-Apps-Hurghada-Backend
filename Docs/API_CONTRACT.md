@@ -120,6 +120,7 @@ Full catalogue of codes (HTTP status in parentheses):
 | `challenge.not_found` (404) | Challenge id does not exist. |
 | `team.not_found` (404) | Team id does not exist. |
 | `question.not_found` (404) | Question missing, inactive, or (for participants) unpublished. |
+| `question.reference_not_publishable` (400) | A `type: "reference"` question cannot be published. |
 | `question.invalid` (400) | Question text/type missing or points ≤ 0. |
 | `sponsor.not_found` (404) | Sponsor id does not exist. |
 | `sponsor.invalid` (400) | Sponsor name missing. |
@@ -550,6 +551,10 @@ Participants see only **released (published), active** questions while the
 competition is **started** by an admin, and **never** the `correctAnswer`;
 staff see everything including answers. A participant's `GET /questions`
 returns `[]` until `POST /game/start` is called.
+
+> Questions with `type: "reference"` are staff-only challenge reference Q&A.
+> They are stored unpublished and cannot be published
+> (`question.reference_not_publishable`).
 
 ### 11.1 `GET /questions?challengeId=` - Any authenticated
 `200` → array of:
