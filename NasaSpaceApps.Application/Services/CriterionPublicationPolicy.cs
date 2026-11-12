@@ -1,11 +1,11 @@
 namespace NasaSpaceApps.Application.Services;
 
 /// <summary>
-/// Resolves which judges a publish / unpublish request applies to.
+/// Resolves which judge/team score pairs a publish / unpublish request applies to.
 /// <para>
 /// A <c>Judge</c> may only publish or withdraw <b>their own</b> scores.
-/// An <c>Admin</c> may publish a specific judge (explicit id), every judge who
-/// has scores on the criterion (force-publish), or withdraw the whole criterion.
+/// An <c>Admin</c> may publish a specific judge and/or team, every scored pair
+/// on the criterion (force-publish), or withdraw the whole criterion.
 /// </para>
 /// </summary>
 public static class CriterionPublicationPolicy
@@ -14,41 +14,52 @@ public static class CriterionPublicationPolicy
     public const string JudgeRole = "Judge";
 
     /// <summary>
-    /// Determines the target judge ids for a publish/unpublish call.
+    /// Determines the target judge/team pairs for a publish/unpublish call.
     /// </summary>
     /// <param name="role">Role of the caller.</param>
     /// <param name="actorJudgeId">Judge profile linked to the caller, if any.</param>
     /// <param name="requestedJudgeId">Explicit target judge requested by an admin.</param>
-    /// <param name="judgesWithScores">Judges who have scores on the criterion.</param>
-    /// <returns>The judge ids affected, or an empty list when the call is not allowed.</returns>
-    public static IReadOnlyList<int> ResolveTargets(
+    /// <param name="requestedTeamId">Explicit target team requested by an admin or judge.</param>
+    /// <param name="scoredTargets">Judge/team pairs that have scores on the criterion.</param>
+    /// <returns>The pairs affected, or an empty list when the call is not allowed.</returns>
+    public static IReadOnlyList<(int JudgeId, int TeamId)> ResolveTargets(
         string? role,
         int? actorJudgeId,
         int? requestedJudgeId,
-        IReadOnlyCollection<int> judgesWithScores)
+        int? requestedTeamId,
+        IReadOnlyCollection<(int JudgeId, int TeamId)> scoredTargets)
     {
         var isAdmin = string.Equals(role, AdminRole, StringComparison.OrdinalIgnoreCase);
         var isJudge = string.Equals(role, JudgeRole, StringComparison.OrdinalIgnoreCase);
 
         if (!isAdmin && !isJudge)
         {
-            return Array.Empty<int>();
+            return Array.Empty<(int JudgeId, int TeamId)>();
         }
+
+        var query = scoredTargets.AsEnumerable();
 
         // A judge always acts on their own scores only.
         if (!isAdmin)
         {
-            return actorJudgeId.HasValue ? new[] { actorJudgeId.Value } : Array.Empty<int>();
-        }
+            if (!actorJudgeId.HasValue)
+            {
+                return Array.Empty<(int JudgeId, int TeamId)>();
+            }
 
-        // Admin targeting one specific judge.
-        if (requestedJudgeId.HasValue)
+            query = query.Where(target => target.JudgeId == actorJudgeId.Value);
+        }
+        else if (requestedJudgeId.HasValue)
         {
-            return new[] { requestedJudgeId.Value };
+            query = query.Where(target => target.JudgeId == requestedJudgeId.Value);
         }
 
-        // Admin with no explicit target: applies to every judge who has scores.
-        return judgesWithScores.Distinct().ToArray();
+        if (requestedTeamId.HasValue)
+        {
+            query = query.Where(target => target.TeamId == requestedTeamId.Value);
+        }
+
+        return query.Distinct().ToArray();
     }
 
     /// <summary>

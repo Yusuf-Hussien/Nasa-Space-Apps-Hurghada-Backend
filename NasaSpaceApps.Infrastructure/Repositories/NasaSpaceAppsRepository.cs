@@ -395,7 +395,7 @@ public sealed class NasaSpaceAppsRepository : INasaSpaceAppsRepository
         return publication;
     }
 
-    public async Task<List<CriterionPublication>> GetCriterionPublicationsAsync(int? criterionId = null, int? judgeId = null)
+    public async Task<List<CriterionPublication>> GetCriterionPublicationsAsync(int? criterionId = null, int? judgeId = null, int? teamId = null)
     {
         var query = _context.CriterionPublications.AsQueryable();
 
@@ -409,15 +409,24 @@ public sealed class NasaSpaceAppsRepository : INasaSpaceAppsRepository
             query = query.Where(publication => publication.JudgeId == judgeId.Value);
         }
 
+        if (teamId.HasValue)
+        {
+            query = query.Where(publication => publication.TeamId == teamId.Value);
+        }
+
         return await query
             .OrderBy(publication => publication.CriterionId)
             .ThenBy(publication => publication.JudgeId)
+            .ThenBy(publication => publication.TeamId)
             .ToListAsync();
     }
 
-    public async Task<CriterionPublication?> GetCriterionPublicationAsync(int criterionId, int judgeId) =>
+    public async Task<CriterionPublication?> GetCriterionPublicationAsync(int criterionId, int judgeId, int teamId) =>
         await _context.CriterionPublications
-            .FirstOrDefaultAsync(publication => publication.CriterionId == criterionId && publication.JudgeId == judgeId);
+            .FirstOrDefaultAsync(publication =>
+                publication.CriterionId == criterionId &&
+                publication.JudgeId == judgeId &&
+                publication.TeamId == teamId);
 
     public async Task UpdateCriterionPublicationAsync(CriterionPublication publication)
     {
@@ -431,12 +440,6 @@ public sealed class NasaSpaceAppsRepository : INasaSpaceAppsRepository
         await _context.SaveChangesAsync();
     }
 
-    public async Task<List<int>> GetJudgeIdsWithScoresForCriterionAsync(int criterionId) =>
-        await _context.JudgeScores
-            .Where(score => score.CriterionId == criterionId)
-            .Select(score => score.JudgeId)
-            .Distinct()
-            .ToListAsync();
 
     public async Task<List<Sponsor>> GetSponsorsAsync(bool activeOnly = true)
     {

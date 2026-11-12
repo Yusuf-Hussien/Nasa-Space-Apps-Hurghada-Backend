@@ -13,6 +13,7 @@ public class Team
     public ICollection<Student> Students { get; set; } = new List<Student>();
     public Project? Project { get; set; }
     public ICollection<JudgeScore> Scores { get; set; } = new List<JudgeScore>();
+    public ICollection<CriterionPublication> CriterionPublications { get; set; } = new List<CriterionPublication>();
     public ICollection<ServiceRequest> Requests { get; set; } = new List<ServiceRequest>();
     public ICollection<GameParticipation> GameParticipations { get; set; } = new List<GameParticipation>();
 }

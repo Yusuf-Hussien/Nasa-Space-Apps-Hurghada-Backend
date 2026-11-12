@@ -607,17 +607,19 @@ Judging uses five **global criteria** shared by every team: **Impact**,
 not tied to a challenge. Judges give one decimal score from **1.0 to 5.0** per
 criterion for each team, with an optional comment.
 
-Each judge submits and **publishes their own** scores. The live board averages
-the scores of every judge who has published that criterion. Only
-published-by-judge scores count; unpublished judges' scores stay hidden until
-they publish. Re-submitting replaces the previous score for the same judge,
-team, and criterion. See [`JUDGING_PROCESS.md`](JUDGING_PROCESS.md) for a
-non-technical walkthrough.
+Each judge submits a score for one team and criterion, and that submission
+**publishes immediately** for that judge, team, and criterion. The live board
+averages the scores of every judge who has submitted that criterion for that
+team. Re-submitting replaces the previous score for the same judge, team, and
+criterion. Admins can also publish or withdraw a judge's saved score later. See
+[`JUDGING_PROCESS.md`](JUDGING_PROCESS.md) for a non-technical walkthrough.
 
 Criterion `questions` are optional reference prompts for admins/judges. They are
 not scored, are not required, and never affect standings.
 
-### 12.1 `GET /judging/criteria` - Public
+### 12.1 `GET /judging/criteria?teamId=` - Public
+`teamId` is optional. When supplied, publication state is scoped to that team;
+when omitted, it covers every team.
 `200` → array of:
 ```json
 {
@@ -631,8 +633,9 @@ not scored, are not required, and never affect standings.
   ]
 }
 ```
-`publishedJudgeCount` is how many judges have published this criterion.
-`isPublishedByCaller` is `null` for anonymous callers and for non-judge authenticated callers.
+`publishedJudgeCount` is how many judges have published this criterion for the
+requested team (or for any team when `teamId` is omitted). `isPublishedByCaller`
+is `null` for anonymous callers and for non-judge authenticated callers.
 
 ### 12.2 `POST /judging/criteria` - `AdminOnly`
 ```json
@@ -657,14 +660,19 @@ Errors: `criterion.not_found`, `criterion.invalid`.
 reference prompts, publications, and judge scores. Errors: `criterion.not_found`.
 
 ### 12.5 `POST /judging/criteria/{criterionId}/publish` - `JudgeOrAdminOnly`
-`POST .../unpublish` reverses it. `200` → updated `JudgingCriterionResponse`.
+`POST .../unpublish` reverses it. `200` returns the updated
+`JudgingCriterionResponse`.
 
-- **Judge:** publishes (or withdraws) their **own** scores only.
-- **Admin:** may pass `?judgeId=N` to target a specific judge, or omit the
-  parameter to **force-publish every judge who has scored** the criterion.
-- Publishing is idempotent; scores only appear once their judge publishes.
+- **Judge:** must pass `?teamId=N`; publishes (or withdraws) their **own** score
+  for that team only.
+- **Admin:** may pass `?judgeId=N` and/or `?teamId=N`. Omitting both targets
+  every scored judge/team pair. Supplying only `judgeId` targets all scored
+  teams for that judge; only `teamId` targets all scored judges for that team;
+  both target the exact pair.
+- Publishing is idempotent and publication is tracked per judge, team, and
+  criterion.
 - Side effect: broadcasts `StandingsUpdated`. Errors: `criterion.not_found`,
-  `judging.not_allowed`, `judging.no_scores`.
+  `team.not_found`, `judging.not_allowed`, `judging.no_scores`.
 
 ### 12.6 `GET /judging/standings` - Public
 The single source of truth for the live board. **Ranked by achieved percentage**
@@ -685,8 +693,32 @@ and does not affect ranking. `200` → array of:
 `rank` is `null` when the team has no published, scored criteria yet.
 `judgesCounted` shows how many judges contributed (useful when coverage is uneven).
 
-### 12.7 `POST /judging/scores` - `JudgeOnly`
-`judgeId` comes from the token - **never** send it in the body. Body:
+### 12.7 `POST /judging/scores/{criterionId}` - `JudgeOnly`
+Saves one criterion score for one team and **publishes it immediately** for that
+judge, team, and criterion. `judgeId` comes from the token. Body:
+```json
+{ "teamId": 1, "score": 4.5, "comment": "Clear, measurable impact" }
+```
+`200` returns both the saved score and the team-scoped criterion state:
+```json
+{
+  "score": {
+    "scoreId": 1, "teamId": 1, "judgeId": 7, "criterionId": 1,
+    "criterionName": "Impact", "maxScore": 5, "score": 4.5,
+    "comment": "Clear, measurable impact", "timestamp": "2026-10-04T09:30:00Z"
+  },
+  "criterion": { "...": "JudgingCriterionResponse for that team" }
+}
+```
+Rules: `teamId` is required; `1.0 <= score <= 5.0`; re-submitting replaces the
+previous score for the same judge, team, and criterion. Side effects: broadcasts
+`ScoresSubmitted` then recalculated `StandingsUpdated`. Errors: `team.not_found`,
+`criterion.not_found`, `judging.no_judge_link`, `score.invalid`.
+
+### 12.8 `POST /judging/scores` - `JudgeOnly` (legacy bulk save)
+Kept for compatibility. This endpoint saves one or more scores but does **not**
+publish them; the frontend uses the per-criterion endpoint above. `judgeId`
+comes from the token - **never** send it in the body. Body:
 ```json
 {
   "teamId": 1,
@@ -713,7 +745,7 @@ Side effects: broadcasts `ScoresSubmitted` then `StandingsUpdated`. Errors:
 in-code `403 judging.no_judge_link`, `team.not_found`, `judging.no_scores`,
 `criterion.not_found`, `score.duplicate`, `score.invalid`.
 
-### 12.8 `GET /judging/scores?teamId=` - `StaffOnly`
+### 12.9 `GET /judging/scores?teamId=` - `StaffOnly`
 `200` → array of `JudgeScoreResponse` (criterion-level detail). `teamId` required.
 
 ---

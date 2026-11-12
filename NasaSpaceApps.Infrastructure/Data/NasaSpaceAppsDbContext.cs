@@ -161,7 +161,13 @@ public class NasaSpaceAppsDbContext : DbContext
             .OnDelete(DeleteBehavior.Cascade);
 
         modelBuilder.Entity<CriterionPublication>()
-            .HasIndex(publication => new { publication.CriterionId, publication.JudgeId })
+            .HasOne(publication => publication.Team)
+            .WithMany(team => team.CriterionPublications)
+            .HasForeignKey(publication => publication.TeamId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<CriterionPublication>()
+            .HasIndex(publication => new { publication.CriterionId, publication.JudgeId, publication.TeamId })
             .IsUnique();
 
         modelBuilder.Entity<JudgeScore>()

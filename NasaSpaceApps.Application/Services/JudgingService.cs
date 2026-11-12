@@ -112,16 +112,17 @@ public sealed class JudgingService
     }
 
     /// <summary>
-    /// Publish or unpublish a criterion for specific judges.
-    /// A judge publishes their own scores; an Admin may target one judge or
-    /// force-publish every judge who has scores on the criterion.
+    /// Publish or unpublish a criterion for specific judge/team pairs.
+    /// A judge publishes their own scores; an Admin may target one judge and/or
+    /// team, or force-publish every scored pair on the criterion.
     /// </summary>
     public async Task<Result<JudgingCriterion>> PublishCriterionAsync(
         int criterionId,
         bool publish,
         string? callerRole,
         int? callerJudgeId,
-        int? targetJudgeId = null)
+        int? targetJudgeId = null,
+        int? targetTeamId = null)
     {
         if (!CriterionPublicationPolicy.CanPublish(callerRole))
         {
@@ -135,8 +136,22 @@ public sealed class JudgingService
             return Result<JudgingCriterion>.Failure("criterion.not_found", 404, "Criterion not found.");
         }
 
-        var judgesWithScores = await _repository.GetJudgeIdsWithScoresForCriterionAsync(criterionId);
-        var targets = CriterionPublicationPolicy.ResolveTargets(callerRole, callerJudgeId, targetJudgeId, judgesWithScores);
+        if (targetTeamId.HasValue && await _repository.GetTeamByIdAsync(targetTeamId.Value) is null)
+        {
+            return Result<JudgingCriterion>.Failure("team.not_found", 404, "The team does not exist.");
+        }
+
+        var criterionScores = await _repository.GetJudgeScoresForCriterionAsync(criterionId);
+        var scoredTargets = criterionScores
+            .Select(score => (score.JudgeId, score.TeamId))
+            .Distinct()
+            .ToList();
+        var targets = CriterionPublicationPolicy.ResolveTargets(
+            callerRole,
+            callerJudgeId,
+            targetJudgeId,
+            targetTeamId,
+            scoredTargets);
 
         if (targets.Count == 0)
         {
@@ -152,15 +167,16 @@ public sealed class JudgingService
 
         if (publish)
         {
-            foreach (var judgeId in targets)
+            foreach (var (judgeId, teamId) in targets)
             {
-                var existing = await _repository.GetCriterionPublicationAsync(criterionId, judgeId);
+                var existing = await _repository.GetCriterionPublicationAsync(criterionId, judgeId, teamId);
                 if (existing is null)
                 {
                     await _repository.AddCriterionPublicationAsync(new CriterionPublication
                     {
                         CriterionId = criterionId,
                         JudgeId = judgeId,
+                        TeamId = teamId,
                         PublishedAt = DateTime.UtcNow
                     });
                 }
@@ -168,9 +184,9 @@ public sealed class JudgingService
         }
         else
         {
-            foreach (var judgeId in targets)
+            foreach (var (judgeId, teamId) in targets)
             {
-                var existing = await _repository.GetCriterionPublicationAsync(criterionId, judgeId);
+                var existing = await _repository.GetCriterionPublicationAsync(criterionId, judgeId, teamId);
                 if (existing is not null)
                 {
                     await _repository.DeleteCriterionPublicationAsync(existing);
@@ -312,9 +328,9 @@ public sealed class JudgingService
         return Result<List<JudgeScore>>.Success(scores);
     }
 
-    public async Task<Result<List<CriterionPublication>>> GetPublicationsAsync(int? criterionId = null, int? judgeId = null)
+    public async Task<Result<List<CriterionPublication>>> GetPublicationsAsync(int? criterionId = null, int? judgeId = null, int? teamId = null)
     {
         return Result<List<CriterionPublication>>.Success(
-            await _repository.GetCriterionPublicationsAsync(criterionId, judgeId));
+            await _repository.GetCriterionPublicationsAsync(criterionId, judgeId, teamId));
     }
 }

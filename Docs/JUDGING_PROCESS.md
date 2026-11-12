@@ -77,21 +77,23 @@ receives exactly one score per judge per team.
 ### Re-scoring
 
 If a judge submits again for the same team and criterion, the new score
-**replaces** the old one. Judges can update their scores until they publish.
+**replaces** the old one and is published again for that team.
 
 ---
 
 ## 5. Publishing and the live scoreboard
 
-Submitting a score does **not** immediately put it on the public board. A judge
-must **publish** the criterion's scores:
+Submitting a score **publishes it immediately** for that judge, team, and
+criterion, so the public board updates as soon as the judge submits.
 
-- Judges publish their **own** scores.
-- An Admin can force-publish every judge who has scored a criterion, or target a
-  specific judge.
-- Publishing is idempotent, and judges can unpublish to withdraw their scores.
+- Judges submit and publish their **own** score for one team at a time.
+- Judges can unpublish a criterion for a team to withdraw their score, then
+  submit again to republish it.
+- An Admin can publish or withdraw scores for every scored judge/team pair, or
+  narrow the change by judge, team, or both.
+- Publishing is idempotent and is tracked per judge, team, and criterion.
 
-The scoreboard only counts scores whose judge has published them.
+The scoreboard only counts published scores.
 
 ### How ranking works
 
@@ -119,7 +121,7 @@ contributed.
 - [ ] Review each team.
 - [ ] Give one 1.0-5.0 score per criterion.
 - [ ] Add comments where useful.
-- [ ] Publish your scores.
+- [ ] Submit each criterion; scores publish automatically.
 
 **Everyone**
 - [ ] Watch the public standings update live.

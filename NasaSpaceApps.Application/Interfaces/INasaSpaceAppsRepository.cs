@@ -52,13 +52,12 @@ public interface INasaSpaceAppsRepository
     Task DeleteQuestionScoreAsync(QuestionScore score);
     Task UpdateQuestionScoreAsync(QuestionScore score);
 
-    // Criterion publications (per-judge publish state)
+    // Criterion publications (per judge/team publish state)
     Task<CriterionPublication> AddCriterionPublicationAsync(CriterionPublication publication);
-    Task<List<CriterionPublication>> GetCriterionPublicationsAsync(int? criterionId = null, int? judgeId = null);
-    Task<CriterionPublication?> GetCriterionPublicationAsync(int criterionId, int judgeId);
+    Task<List<CriterionPublication>> GetCriterionPublicationsAsync(int? criterionId = null, int? judgeId = null, int? teamId = null);
+    Task<CriterionPublication?> GetCriterionPublicationAsync(int criterionId, int judgeId, int teamId);
     Task UpdateCriterionPublicationAsync(CriterionPublication publication);
     Task DeleteCriterionPublicationAsync(CriterionPublication publication);
-    Task<List<int>> GetJudgeIdsWithScoresForCriterionAsync(int criterionId);
     Task<List<Sponsor>> GetSponsorsAsync(bool activeOnly = true);
     Task<Sponsor?> GetSponsorByIdAsync(int sponsorId);
     Task<List<SponsorTier>> GetSponsorTiersAsync();

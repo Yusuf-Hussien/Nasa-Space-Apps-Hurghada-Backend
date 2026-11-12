@@ -16,9 +16,13 @@ public sealed record JudgingCriterionResponse(
     List<CriterionQuestionResponse> Questions)
 {
     public static JudgingCriterionResponse From(JudgingCriterion criterion) =>
-        From(criterion, null, null);
+        From(criterion, null, null, null);
 
-    public static JudgingCriterionResponse From(JudgingCriterion criterion, IReadOnlyCollection<CriterionPublication>? publications, int? callerJudgeId)
+    public static JudgingCriterionResponse From(
+        JudgingCriterion criterion,
+        IReadOnlyCollection<CriterionPublication>? publications,
+        int? callerJudgeId,
+        int? teamId = null)
     {
         IReadOnlyCollection<CriterionPublication> pubs;
         if (publications is not null)
@@ -34,8 +38,14 @@ public sealed record JudgingCriterionResponse(
             pubs = Array.Empty<CriterionPublication>();
         }
 
-        var criterionPublications = pubs.Where(publication => publication.CriterionId == criterion.CriterionId).ToList();
-        var publishedCount = criterionPublications.Count;
+        var criterionPublications = pubs
+            .Where(publication => publication.CriterionId == criterion.CriterionId)
+            .Where(publication => !teamId.HasValue || publication.TeamId == teamId.Value)
+            .ToList();
+        var publishedCount = criterionPublications
+            .Select(publication => publication.JudgeId)
+            .Distinct()
+            .Count();
         bool? publishedByCaller = null;
         if (callerJudgeId.HasValue)
         {

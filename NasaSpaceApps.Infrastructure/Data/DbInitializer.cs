@@ -24,6 +24,7 @@ public static class DbInitializer
         try
         {
             ApplyJudgingRedesignMigration(context);
+            ApplyCriterionPublicationTeamMigration(context);
 
             if (context.Challenges.Any())
             {
@@ -84,6 +85,77 @@ IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_JudgeScores_JudgeId_Te
         context.SaveChanges();
 
         transaction?.Commit();
+    }
+
+    private const string CriterionPublicationTeamMigrationKey = "2026-criterion-publication-team-v1";
+
+    /// <summary>
+    /// Upgrades criterion publications from per-(judge, criterion) visibility to
+    /// per-(judge, team, criterion). Existing publications are expanded from the
+    /// judge's scored teams so the live scoreboard is preserved across the upgrade.
+    /// </summary>
+    private static void ApplyCriterionPublicationTeamMigration(NasaSpaceAppsDbContext context)
+    {
+        if (!context.Database.IsRelational())
+        {
+            return;
+        }
+
+        if (context.AppMigrations.Any(migration => migration.Key == CriterionPublicationTeamMigrationKey))
+        {
+            return;
+        }
+
+        using var transaction = context.Database.BeginTransaction();
+
+        // SQL Server compiles each batch as a unit, so the new TeamId column must
+        // exist in a separate batch before later statements can reference it.
+        context.Database.ExecuteSqlRaw(@"
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('CriterionPublications') AND name = 'TeamId')
+    ALTER TABLE [CriterionPublications] ADD [TeamId] INT NULL;
+
+-- The old index only allows one row per judge/criterion, so it must be removed
+-- before expanding publications to one row per scored team.
+IF EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_CriterionPublications_CriterionId_JudgeId' AND object_id = OBJECT_ID('CriterionPublications'))
+    DROP INDEX [IX_CriterionPublications_CriterionId_JudgeId] ON [CriterionPublications];
+");
+
+        context.Database.ExecuteSqlRaw(@"
+INSERT INTO [CriterionPublications] ([CriterionId], [JudgeId], [TeamId], [PublishedAt])
+SELECT DISTINCT publication.[CriterionId], publication.[JudgeId], score.[TeamId], publication.[PublishedAt]
+FROM [CriterionPublications] AS publication
+INNER JOIN [JudgeScores] AS score
+    ON score.[CriterionId] = publication.[CriterionId]
+    AND score.[JudgeId] = publication.[JudgeId]
+WHERE publication.[TeamId] IS NULL
+    AND NOT EXISTS (
+        SELECT 1
+        FROM [CriterionPublications] AS existing
+        WHERE existing.[CriterionId] = publication.[CriterionId]
+            AND existing.[JudgeId] = publication.[JudgeId]
+            AND existing.[TeamId] = score.[TeamId]);
+
+DELETE FROM [CriterionPublications] WHERE [TeamId] IS NULL;
+
+-- Make the column required before adding the index/FK that depend on it.
+IF EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('CriterionPublications') AND name = 'TeamId' AND is_nullable = 1)
+    ALTER TABLE [CriterionPublications] ALTER COLUMN [TeamId] INT NOT NULL;
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_CriterionPublications_CriterionId_JudgeId_TeamId' AND object_id = OBJECT_ID('CriterionPublications'))
+    CREATE UNIQUE INDEX [IX_CriterionPublications_CriterionId_JudgeId_TeamId] ON [CriterionPublications]([CriterionId], [JudgeId], [TeamId]);
+
+IF NOT EXISTS (SELECT * FROM sys.foreign_keys WHERE name = 'FK_CriterionPublications_Teams')
+    ALTER TABLE [CriterionPublications] ADD CONSTRAINT [FK_CriterionPublications_Teams] FOREIGN KEY ([TeamId]) REFERENCES [Teams]([TeamId]) ON DELETE CASCADE;
+");
+
+        context.AppMigrations.Add(new AppMigration
+        {
+            Key = CriterionPublicationTeamMigrationKey,
+            AppliedAt = DateTime.UtcNow
+        });
+        context.SaveChanges();
+
+        transaction.Commit();
     }
 
     private static JudgingCriterion[] CreateGlobalCriteria() =>
@@ -304,8 +376,10 @@ IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_JudgeScores_JudgeId_Te
             // scoreboard is populated on first run.
             var publishedAt = DateTime.UtcNow;
             context.CriterionPublications.AddRange(
-                new CriterionPublication { Criterion = criteria[0], Judge = judge, PublishedAt = publishedAt },
-                new CriterionPublication { Criterion = criteria[1], Judge = judge, PublishedAt = publishedAt });
+                new CriterionPublication { Criterion = criteria[0], Judge = judge, TeamId = team1.TeamId, PublishedAt = publishedAt },
+                new CriterionPublication { Criterion = criteria[1], Judge = judge, TeamId = team1.TeamId, PublishedAt = publishedAt },
+                new CriterionPublication { Criterion = criteria[0], Judge = judge, TeamId = team2.TeamId, PublishedAt = publishedAt },
+                new CriterionPublication { Criterion = criteria[1], Judge = judge, TeamId = team2.TeamId, PublishedAt = publishedAt });
 
             criteria[0].IsPublished = true;
             criteria[0].PublishedAt = publishedAt;
@@ -493,23 +567,25 @@ CREATE TABLE [QuestionScores] (
     CONSTRAINT [FK_QuestionScores_Judges] FOREIGN KEY ([JudgeId]) REFERENCES [Judges]([JudgeId]) ON DELETE CASCADE
 );
 
--- ============ CriterionPublications (per-judge publish of a criterion) ============
+-- ============ CriterionPublications (per judge/team publish of a criterion) ============
 IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'CriterionPublications')
 BEGIN
     CREATE TABLE [CriterionPublications] (
         [CriterionPublicationId] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
         [CriterionId] INT NOT NULL,
         [JudgeId] INT NOT NULL,
+        [TeamId] INT NOT NULL,
         [PublishedAt] DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
         CONSTRAINT [FK_CriterionPublications_Criteria] FOREIGN KEY ([CriterionId]) REFERENCES [JudgingCriteria]([CriterionId]) ON DELETE CASCADE,
-        CONSTRAINT [FK_CriterionPublications_Judges] FOREIGN KEY ([JudgeId]) REFERENCES [Judges]([JudgeId]) ON DELETE CASCADE
+        CONSTRAINT [FK_CriterionPublications_Judges] FOREIGN KEY ([JudgeId]) REFERENCES [Judges]([JudgeId]) ON DELETE CASCADE,
+        CONSTRAINT [FK_CriterionPublications_Teams] FOREIGN KEY ([TeamId]) REFERENCES [Teams]([TeamId]) ON DELETE CASCADE
     );
-    CREATE UNIQUE INDEX [IX_CriterionPublications_CriterionId_JudgeId] ON [CriterionPublications]([CriterionId], [JudgeId]);
+    CREATE UNIQUE INDEX [IX_CriterionPublications_CriterionId_JudgeId_TeamId] ON [CriterionPublications]([CriterionId], [JudgeId], [TeamId]);
 END
 ELSE
 BEGIN
-    IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_CriterionPublications_CriterionId_JudgeId' AND object_id = OBJECT_ID('CriterionPublications'))
-    CREATE UNIQUE INDEX [IX_CriterionPublications_CriterionId_JudgeId] ON [CriterionPublications]([CriterionId], [JudgeId]);
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('CriterionPublications') AND name = 'TeamId')
+        ALTER TABLE [CriterionPublications] ADD [TeamId] INT NULL;
 END
 
 -- ============ JudgeScores ============

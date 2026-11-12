@@ -1,4 +1,4 @@
-﻿using NasaSpaceApps.Application.Services;
+using NasaSpaceApps.Application.Services;
 using NasaSpaceApps.Domain.Entities;
 
 namespace NasaSpaceApps.Application.Tests;
@@ -16,8 +16,8 @@ public class StandingsCalculatorTests
             Criterion = new JudgingCriterion { CriterionId = criterionId, Name = $"C{criterionId}", IsPublished = true }
         };
 
-    private static CriterionPublication Pub(int criterionId, int judgeId) =>
-        new() { CriterionId = criterionId, JudgeId = judgeId };
+    private static CriterionPublication Pub(int criterionId, int judgeId, int teamId) =>
+        new() { CriterionId = criterionId, JudgeId = judgeId, TeamId = teamId };
 
     private static readonly Team[] Teams =
     {
@@ -35,7 +35,7 @@ public class StandingsCalculatorTests
             Score(1, 1, 4m),
             Score(2, 1, 15m, 20m)
         };
-        var pubs = new List<CriterionPublication> { Pub(1, 1) };
+        var pubs = new List<CriterionPublication> { Pub(1, 1, 1), Pub(1, 1, 2) };
 
         var standings = StandingsCalculator.Calculate(scores, Teams, pubs);
 
@@ -56,7 +56,7 @@ public class StandingsCalculatorTests
             Score(1, 1, 4m),
             Score(2, 1, 8m, 10m)
         };
-        var pubs = new List<CriterionPublication> { Pub(1, 1) };
+        var pubs = new List<CriterionPublication> { Pub(1, 1, 1), Pub(1, 1, 2) };
 
         var standings = StandingsCalculator.Calculate(scores, Teams, pubs);
 
@@ -89,7 +89,7 @@ public class StandingsCalculatorTests
         var standings = StandingsCalculator.Calculate(
             new List<JudgeScore> { Score(1, 1, 5m) },
             Teams,
-            new List<CriterionPublication> { Pub(1, 1) });
+            new List<CriterionPublication> { Pub(1, 1, 1) });
 
         Assert.Equal(3, standings.Count);
 
@@ -112,7 +112,7 @@ public class StandingsCalculatorTests
             Score(1, 1, 4.5m, judgeId: 1),
             Score(1, 1, 4m, judgeId: 2)
         };
-        var pubs = new List<CriterionPublication> { Pub(1, 1), Pub(1, 2) };
+        var pubs = new List<CriterionPublication> { Pub(1, 1, 1), Pub(1, 2, 1) };
 
         var standings = StandingsCalculator.Calculate(scores, Teams, pubs);
         var alpha = standings.Single(row => row.TeamId == 1);
@@ -133,7 +133,7 @@ public class StandingsCalculatorTests
             Score(1, 1, 4.5m, judgeId: 1),
             Score(1, 1, 2.5m, judgeId: 2)
         };
-        var pubs = new List<CriterionPublication> { Pub(1, 1) };
+        var pubs = new List<CriterionPublication> { Pub(1, 1, 1) };
 
         var standings = StandingsCalculator.Calculate(scores, Teams, pubs);
         var alpha = standings.Single(row => row.TeamId == 1);
@@ -151,11 +151,28 @@ public class StandingsCalculatorTests
         var standings = StandingsCalculator.Calculate(
             new List<JudgeScore> { score },
             Teams,
-            new List<CriterionPublication> { Pub(1, 1) });
+            new List<CriterionPublication> { Pub(1, 1, 1) });
         var alpha = standings.Single(row => row.TeamId == 1);
 
         Assert.Equal(5m, alpha.AvailableScore);
         Assert.Equal(80m, alpha.Percentage);
+    }
+
+    [Fact]
+    public void Calculate_ShouldOnlyCountPublicationForTheScoredTeam()
+    {
+        var scores = new List<JudgeScore>
+        {
+            Score(1, 1, 5m, judgeId: 1),
+            Score(2, 1, 1m, judgeId: 1)
+        };
+        var pubs = new List<CriterionPublication> { Pub(1, 1, 1) };
+
+        var standings = StandingsCalculator.Calculate(scores, Teams, pubs);
+
+        Assert.Equal(100m, standings.Single(row => row.TeamId == 1).Percentage);
+        Assert.Null(standings.Single(row => row.TeamId == 2).Rank);
+        Assert.Equal(0m, standings.Single(row => row.TeamId == 2).Percentage);
     }
 
     [Fact]

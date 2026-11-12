@@ -53,11 +53,11 @@ public static class StandingsCalculator
         IEnumerable<CriterionPublication> publications)
     {
         var publishedKeys = publications
-            .Select(publication => (publication.CriterionId, publication.JudgeId))
+            .Select(publication => (publication.CriterionId, publication.JudgeId, publication.TeamId))
             .ToHashSet();
 
         var visible = scores
-            .Where(score => publishedKeys.Contains((score.CriterionId, score.JudgeId)))
+            .Where(score => publishedKeys.Contains((score.CriterionId, score.JudgeId, score.TeamId)))
             .ToList();
 
         var byTeam = visible
