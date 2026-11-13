@@ -2,7 +2,7 @@
 
 **Version:** 1.0  
 **Date:** 2026-10-22  
-**Backend API:** REST \pi/v1/*\ + SignalR (\/hubs/requests\, \/hubs/judging\)  
+**Backend API:** REST \pi/v1/*\ + SignalR (\/hubs/requests\, \/hubs/judging\, \/hubs/game\)
 **Auth:** JWT Bearer tokens (role-based)  
 **References:** \Docs/API_CONTRACT.md\, \Docs/JUDGING_PROCESS.md\, \Docs/PRD_TRACEABILITY.md\, \README.md\
 
@@ -56,7 +56,6 @@ src/
 | /challenges/:challengeId | Challenge Detail | Challenge details + image | GET /challenges/:challengeId | - |
 | /sponsors | Sponsors | Sponsors grouped by tier | GET /sponsors, GET /sponsors/tiers | - |
 | /season-media | Season Media Gallery | Past season media | GET /seasonmedia | Public (images/videos/links) |
-| /leaderboard/game | Game Leaderboard | Side trophy leaderboard | GET /game/leaderboard | Public |
 | / (Core Team section) | Core Team Section | Active CoreTeam members on the homepage | GET /core-team | Public; returns only staffId, fullName, memberType, photo |
 
 ### 4.2 Authenticated Pages (Any Role)
@@ -106,7 +105,8 @@ src/
 | /admin/criteria | Criteria Management | CRUD global criteria + optional reference prompts | GET/POST/PUT/DELETE /judging/criteria | AdminOnly; maxScore/weight locked at 5/20 |
 | /admin/criteria/publish | Publish Management | Force-publish/target judges | GET /judging/criteria, POST /judging/criteria/:criterionId/publish?judgeId=, GET /judging/scores?teamId= | AdminOnly - omit judgeId to force-publish all judges with scores |
 | /admin/sponsors | Sponsors Management | CRUD sponsors/tiers + logos | GET/POST/PUT/DELETE /sponsors, GET/POST/PUT/DELETE /sponsors/tiers | AdminOnly, base64/data URI/URL (20MB decoded) |
-| /admin/questions | Game Questions Management | Start/stop game + CRUD + publish/unpublish | GET /game/state, POST /game/start, POST /game/stop, GET/POST/PUT/DELETE /questions, POST /questions/:questionId/publish, POST /questions/:questionId/unpublish | AdminOnly; start game first, then publish individual questions to reveal them |
+| /admin/questions | Game Questions Management | Start/stop game + CRUD + publish/unpublish | GET /game/state, POST /game/start, POST /game/stop, GET/POST/PUT/DELETE /questions, POST /questions/:questionId/publish, POST /questions/:questionId/unpublish + SignalR GameStateChanged/QuestionUpdated/QuestionReleased/QuestionRetracted | AdminOnly; start game first, then publish individual questions to reveal them |
+| /admin/game/leaderboard | Game Leaderboard | Live side-trophy scoreboard | GET /game/leaderboard + SignalR AnswerSubmitted/LeaderboardUpdated | AdminOnly; join `GameAdmins` on `/hubs/game`; not public |
 | /admin/season-media | Season Media Management | CRUD season media | GET/POST/PUT/DELETE /seasonmedia | AdminOnly |
 | /admin/email | Bulk Email | Compose subject/body and send to many recipients | POST /email/send | AdminOnly; branded footer/signature is added automatically; plain text by default, set isBodyHtml for HTML |
 | /admin/challenges | Challenges Management | Set challenge images | PATCH /challenges/:challengeId/image | AdminOnly |
@@ -116,7 +116,7 @@ src/
 | Route | Page Name | Purpose | Key APIs | Notes |
 |---|---|---|---|---|
 | /participant/dashboard | Participant Dashboard | Team info, challenge, project | GET /auth/me or GET /teams/:teamId | ParticipantOnly |
-| /participant/game | Game Play | Wait for admin start, then answer questions | GET /game/state, GET /questions, POST /game/questions/:questionId/answer | Show a waiting screen when `isStarted` is false; questions are hidden until both started and published; one answer per team per question |
+| /participant/game | Game Play | Wait for admin start, then answer questions | GET /game/state, GET /questions, POST /game/questions/:questionId/answer + SignalR GameStateChanged/QuestionReleased/QuestionUpdated/QuestionRetracted | ParticipantOnly; join `GameParticipants` on `/hubs/game`; show a waiting screen when `isStarted` is false; questions are hidden until both started and published; one answer per team per question; answer response only confirms `submittedAt` |
 | /participant/requests | My Requests | Create/manage own requests | GET/POST/DELETE /requests | Auto-scoped to own team |
 
 ---
@@ -150,6 +150,8 @@ src/
 ## 7) Real-Time
 - /hubs/judging (public/anonymous allowed): ScoresSubmitted, StandingsUpdated → refresh standings/live UI
 - /hubs/requests (authenticated): join Organizers for staff; RequestCreated/Updated/Deleted
+- /hubs/game (authenticated): admins join `GameAdmins` for AnswerSubmitted/LeaderboardUpdated plus question/state events; participants join `GameParticipants` for GameStateChanged/QuestionReleased/QuestionUpdated/QuestionRetracted only
+- Game scoreboard visibility: `GET /game/leaderboard` and `LeaderboardUpdated` are AdminOnly; judging `/standings` remains public
 
 ---
 

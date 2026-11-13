@@ -12,4 +12,8 @@ public static class ClaimsPrincipalExtensions
         (principal.IsInRole(AppRoles.Admin) ||
          principal.IsInRole(AppRoles.CoreTeam) ||
          principal.IsInRole(AppRoles.Judge));
+
+    public static bool IsAdmin(this ClaimsPrincipal? principal) =>
+        principal?.Identity?.IsAuthenticated == true &&
+        principal.IsInRole(AppRoles.Admin);
 }

@@ -123,6 +123,20 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidAudience = jwtOptions.Audience,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.Key))
         };
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                if (!string.IsNullOrWhiteSpace(accessToken) &&
+                    context.HttpContext.Request.Path.StartsWithSegments("/hubs"))
+                {
+                    context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+            }
+        };
     });
 
 builder.Services.AddAuthorization(options =>
@@ -165,5 +179,6 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapHub<NasaSpaceApps.Api.Hubs.RequestsHub>(NasaSpaceApps.Api.Hubs.RequestsHub.Url);
 app.MapHub<NasaSpaceApps.Api.Hubs.JudgingHub>(NasaSpaceApps.Api.Hubs.JudgingHub.Url);
+app.MapHub<NasaSpaceApps.Api.Hubs.GameHub>(NasaSpaceApps.Api.Hubs.GameHub.Url);
 
 app.Run();

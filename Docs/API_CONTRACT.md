@@ -202,7 +202,7 @@ Free-form string (no server-side whitelist). Suggested UI values:
 | Sponsors | list, tiers, get | - | create/update/delete | - | - | - |
 | Questions | - | list, get | create/update/publish/delete | - | - | - |
 | Judging | criteria, standings | - | criteria CRUD | scores (Staff) | submit scores, publish/unpublish own scores | - |
-| Game | state, leaderboard | - | start/stop | - | - | submit answer |
+| Game | state | - | leaderboard, start/stop | - | - | submit answer |
 | Season media | list, get | - | create/update/delete | - | - | - |
 | Email | - | - | send | - | - | - |
 | Staff | - | - | all | - | - | - |
@@ -779,12 +779,14 @@ Stops the competition and returns the same `GameStateResponse`. Idempotent.
 Participants immediately receive `[]` from `GET /questions` and
 `404 question.not_found` for direct question reads.
 
-### 13.4 `GET /game/leaderboard` - Public
-`200` → array of:
+### 13.4 `GET /game/leaderboard` - `AdminOnly`
+`200` ? array of:
 ```json
 { "rank": 1, "teamId": 1, "teamName": "Orion", "correctCount": 4, "totalPoints": 40, "isTied": false }
 ```
-Ordering: points desc, then correct-count desc, then name.
+Ordering: points desc, then correct-count desc, then name. Live leaderboard rows are
+also pushed to the game admin SignalR group; participants and spectators cannot read
+or subscribe to this scoreboard.
 
 ### 13.5 `POST /game/questions/{questionId}/answer` - `ParticipantOnly`
 The answering team comes from the token. One answer per team per question.
@@ -794,11 +796,12 @@ Body:
 ```
 `200`:
 ```json
-{ "correct": true, "points": 10, "submittedAt": "2026-10-04T09:30:00Z" }
+{ "submittedAt": "2026-10-04T09:30:00Z" }
 ```
-Question must be active **and** published. Grading: free-text is
-case-insensitive trimmed compare; multiple-choice accepts the option text, or
-a zero-based index as a string. Errors: `game.not_started`, `question.not_found`,
+The participant response intentionally omits `correct` and `points`; those are
+delivered only to the game admin SignalR group. Grading: free-text answers use
+case-insensitive trimmed compare; multiple-choice accepts the option text, or a
+zero-based index as a string. Errors: `game.not_started`, `question.not_found`,
 `answer.empty`, `answer.already_submitted`, `game.not_participant`.
 
 ---
@@ -1006,14 +1009,16 @@ If email is not configured, the rest of the API still starts normally; only
 
 ## 15. Real-time (SignalR)
 
-Hub endpoints accept the same `Authorization: Bearer <token>` (SignalR sends it
-in the negotiate query for the WebSocket/SSE transport; use the standard
-`accessTokenFactory`).
+Authenticated hubs use the standard SignalR `accessTokenFactory`: the token is
+sent as `Authorization: Bearer <token>` on negotiate and as the `access_token`
+query parameter on the WebSocket/SSE connection. The API accepts both forms for
+paths under `/hubs`.
 
 | Hub | URL | Access |
 | --- | --- | --- |
 | Requests | `/hubs/requests` | Authenticated. Staff join group `Organizers`; participants join their team group to receive events. |
-| Judging | `/hubs/judging` | Public (anonymous allowed). |
+| Judging | `/hubs/judging` | Public (anonymous allowed). Judging standings remain public. |
+| Game | `/hubs/game` | Authenticated. Admins join `GameAdmins`; participants join `GameParticipants`. |
 
 Events (server → client):
 
@@ -1024,12 +1029,28 @@ Events (server → client):
 | Requests | `RequestDeleted` | the deleted `requestId` (number) |
 | Judging | `ScoresSubmitted` | `{ teamId, judgeId, scores: JudgeScoreResponse[] }` |
 | Judging | `StandingsUpdated` | full standings array (`StandingsEntryResponse[]`, averaged across published judges) |
+| Game | `GameStateChanged` | a `GameStateResponse` (sent to admins and participants) |
+| Game | `QuestionReleased` | a `QuestionResponse`; admins receive `correctAnswer`, participants receive `null` |
+| Game | `QuestionUpdated` | a `QuestionResponse`; participants only receive it while the game is started and the question is published |
+| Game | `QuestionRetracted` | `{ questionId }` |
+| Game | `AnswerSubmitted` | `{ questionId, teamId, answer, correct, points, submittedAt }` - admins only |
+| Game | `LeaderboardUpdated` | full `LeaderboardRow[]` - admins only |
 
 `RequestsHub` client calls:
 - `JoinOrganizers()` - staff only; adds the caller to the `Organizers` group.
 - `LeaveOrganizers()`.
 - `JoinTeamGroup()` - participant only; adds the caller to their token's team group.
 - `LeaveTeamGroup()`.
+
+`GameHub` client calls:
+- `JoinAdminGroup()` - strict `Admin` role only; adds the caller to `GameAdmins`.
+- `LeaveAdminGroup()`.
+- `JoinParticipantGroup()` - requires a `teamId` claim; adds the caller to `GameParticipants`.
+- `LeaveParticipantGroup()`.
+
+Participants receive `QuestionReleased`/`QuestionUpdated` only while the game is
+started. Answer correctness, points, and `LeaderboardUpdated` are never broadcast
+to participants.
 
 ---
 
