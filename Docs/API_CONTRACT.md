@@ -170,7 +170,7 @@ Full catalogue of codes (HTTP status in parentheses):
 `"Active"` | `"Inactive"`. Only `Active` accounts/teams can log in.
 
 ### 4.3 Core-team `memberType`
-`Organizer`, `Mentor`, `Developer`, `Marketing`, `PR`, `Media`, `Highboard`.
+`Local Lead`, `Highboard`, `Developer`, `Mentor`, `Media`, `Marketing`, `PR`, `Organizer`.
 Required when `role == "CoreTeam"`; ignored (stored as `null`) for other roles.
 Member type is descriptive only - it grants no extra permissions.
 `GET /staff/member-types` returns this list for dropdowns.
@@ -859,11 +859,13 @@ Both return the updated `StaffResponse`. Errors: `staff.not_found`.
 Hard delete. `200` → `{ "id": 1, "deleted": true }`. Errors: `staff.not_found`.
 
 ### 14.6 `GET /staff/member-types` - `AdminOnly`
-`200` → `["Organizer","Mentor","Developer","Marketing","PR","Media","Highboard"]`.
+`200` → `["Local Lead","Highboard","Developer","Mentor","Media","Marketing","PR","Organizer"]`.
 
 ### 14.7 `GET /core-team` - Public
 Public list of **active** CoreTeam members for the homepage section. Inactive
-CoreTeam accounts are excluded. `200` → array of public-only fields:
+CoreTeam accounts are excluded. Members are ordered by role priority
+(`Local Lead`, `Highboard`, `Developer`, `Mentor`, `Media`, `Marketing`, `PR`,
+`Organizer`), then by name. `200` → array of public-only fields:
 ```json
 {
   "staffId": 7, "fullName": "Sara Hassan", "memberType": "Mentor",

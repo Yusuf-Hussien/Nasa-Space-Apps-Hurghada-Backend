@@ -41,7 +41,7 @@ public class StaffController : ControllerBase
 
     /// <summary>
     /// Create a staff member (CoreTeam or Judge or Admin).
-    /// CoreTeam requires memberType: Organizer | Mentor | Developer | Marketing | PR | Media | Highboard.
+    /// CoreTeam requires memberType: Local Lead | Highboard | Developer | Mentor | Media | Marketing | PR | Organizer.
     /// Judges auto-get a linked Judge profile for score attribution.
     /// </summary>
     [HttpPost]
