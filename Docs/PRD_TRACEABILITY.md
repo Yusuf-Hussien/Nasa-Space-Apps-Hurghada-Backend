@@ -73,7 +73,7 @@ but not described in the PRD.
 | E3 | `DELETE /requests/{id}` | `RequestsController` |
 | E4 | `GET /auth/me` | `AuthController` |
 | E5 | Question soft-delete + publish/unpublish workflow | `QuestionsController` |
-| E6 | Game leaderboard endpoint | `GET /game/leaderboard` |
+| E6 | Game leaderboard endpoint (`AdminOnly`, live via `LeaderboardUpdated`) | `GET /game/leaderboard` |
 | E7 | Role-stripped responses (teams hide `username` from non-staff; questions hide `correctAnswer` from participants) | DTO `From()` mappers |
 | E8 | Team detail now includes full team + challenge + roster on participant login | This change (see §7) |
 | E9 | Base64 image fields + public season-media CRUD | Earlier change (see §7) |
@@ -104,6 +104,10 @@ but not described in the PRD.
 
 ## 7. Change log for this review
 
+- **Game and leaderboard contract aligned with the clients.**
+  - `GET /game/leaderboard` is now `AdminOnly`; rows are also pushed to the `GameAdmins` hub group as `LeaderboardUpdated`.
+  - `POST /game/questions/{questionId}/answer` returns only `{ submittedAt }`; correctness and points are broadcast to admins via `AnswerSubmitted` and are no longer disclosed to the participant.
+  - `GameHub` (`/hubs/game`): `JoinAdminGroup`/`JoinParticipantGroup`, events `GameStateChanged`, `QuestionReleased`, `QuestionUpdated`, `QuestionRetracted`, `AnswerSubmitted`, `LeaderboardUpdated`.
 - **Participant login now uses the team username.**
   - `POST /auth/login/participant` body: `{ "username": "orion", "password": "...", "rememberMe": false }`.
   - Response now returns `teamId`, full `team` details (name, username, status), `challenge` details, and the team's `students`.
